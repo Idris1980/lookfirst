@@ -135,18 +135,42 @@ function findLeftovers(code) {
   return [...found];
 }
 
-// pickModel chooses which language model to ask. A name in the setting
-// wins when a model's name, family or id contains it. Otherwise the largest
-// model wins, and small ones ("mini", "nano", "flash") only if nothing else
-// is there: a careful explanation matters more than a fast one.
+// pickModel chooses which language model in VS Code to ask. A name in the
+// setting narrows the choice to models whose name, family or id contains
+// it; among those, or among all when nothing matches, the largest wins, and
+// small ones ("mini", "nano", "haiku") only if nothing else is there: a
+// careful explanation matters more than a fast one.
 function pickModel(models, wanted) {
   const want = String(wanted || '').trim().toLowerCase();
-  if (want) {
-    const match = models.find((m) => [m.name, m.family, m.id].some((s) => String(s || '').toLowerCase().includes(want)));
-    if (match) return match;
-  }
+  const matching = want
+    ? models.filter((m) => [m.name, m.family, m.id].some((s) => String(s || '').toLowerCase().includes(want)))
+    : [];
+  const pool = matching.length > 0 ? matching : models;
   const small = (m) => /mini|nano|flash|haiku|small/i.test(`${m.family} ${m.name} ${m.id}`);
-  return [...models].sort((a, b) => (small(a) - small(b)) || ((b.maxInputTokens || 0) - (a.maxInputTokens || 0)))[0];
+  return [...pool].sort((a, b) => (small(a) - small(b)) || ((b.maxInputTokens || 0) - (a.maxInputTokens || 0)))[0];
+}
+
+// The Anthropic API model to use when the user chooses Anthropic: the
+// current Opus unless the setting names a model ("claude-sonnet-5-5") or a
+// family ("sonnet", "haiku", "fable").
+const ANTHROPIC_DEFAULT = 'claude-opus-5-5';
+const ANTHROPIC_FAMILIES = { opus: 'claude-opus-5-5', sonnet: 'claude-sonnet-5-5', haiku: 'claude-haiku-5-5', fable: 'claude-fable-5-1' };
+
+function anthropicModel(wanted) {
+  const want = String(wanted || '').trim().toLowerCase();
+  if (/^claude-[a-z0-9-]+$/.test(want)) return want;
+  for (const [family, id] of Object.entries(ANTHROPIC_FAMILIES)) {
+    if (want.includes(family)) return id;
+  }
+  return ANTHROPIC_DEFAULT;
+}
+
+// modelLabel turns "claude-opus-5-5" into "Claude Opus 5.5" for people.
+function modelLabel(id) {
+  const parts = String(id).split('-');
+  const words = parts.filter((p) => !/^\d+$/.test(p)).map((p) => p[0].toUpperCase() + p.slice(1));
+  const version = parts.filter((p) => /^\d+$/.test(p)).join('.');
+  return version ? `${words.join(' ')} ${version}` : words.join(' ');
 }
 
 // replaceLines returns text with lines start..end (counting from 1, both
@@ -159,4 +183,4 @@ function replaceLines(text, start, end, code) {
   return lines.join(eol);
 }
 
-module.exports = { languageName, buildPrompt, parseAnswer, restoreSecrets, escapeHTML, answerHTML, findLeftovers, pickModel, replaceLines };
+module.exports = { languageName, buildPrompt, parseAnswer, restoreSecrets, escapeHTML, answerHTML, findLeftovers, pickModel, anthropicModel, modelLabel, replaceLines };

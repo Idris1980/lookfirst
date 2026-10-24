@@ -44,7 +44,7 @@ Point it at a whole repository and each folder with code gets its own picture, w
 
 **In VS Code:** right-click a file or folder and choose **Show in LookFirst**. Click a box in the picture, or a finding in the list, to jump to that line. Files are also checked when you save them, and right after a larger piece of code is pasted.
 
-**Explain and fix with AI:** next to each finding, and on the light bulb of each squiggle, LookFirst can ask the AI model you already use in VS Code (such as GitHub Copilot) to explain the problem in plain language and suggest a fix. It is off until you turn it on. Only about 30 lines around the problem are sent, with passwords and keys replaced by placeholders such as `«SECRET_1»`; you see the exact text and choose Send or Cancel every time. A suggested fix is shown as a comparison with your code and changes the file only when you choose Apply.
+**Explain and fix with AI:** next to each finding, and on the light bulb of each squiggle, LookFirst can ask the AI model you already use in VS Code (such as GitHub Copilot, including Copilot Free) to explain the problem in plain language and suggest a fix, or, if you prefer, Claude through your own Anthropic API key, stored encrypted in VS Code's secret storage. It is off until you turn it on. Only about 30 lines around the problem are sent, with passwords and keys replaced by placeholders such as `«SECRET_1»`; you see the exact text and choose Send or Cancel every time. A suggested fix is shown as a comparison with your code and changes the file only when you choose Apply.
 
 **On the command line:**
 
@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: Idris1980/lookfirst@v0.7.0
+      - uses: Idris1980/lookfirst@v0.8.0
         with:
           path: .          # files or folders, separated by spaces
           fail-on: high    # or medium, low, none
@@ -116,13 +116,13 @@ LookFirst tells you what it found. It cannot promise that code is safe: code wri
 Download the `.vsix` for your platform from [Releases](https://github.com/Idris1980/lookfirst/releases) and install it:
 
 ```
-code --install-extension lookfirst-win32-x64-0.7.0.vsix
+code --install-extension lookfirst-win32-x64-0.8.0.vsix
 ```
 
 Every file in a release is built by GitHub Actions from this repository and signed with Sigstore. Check a file before you install it:
 
 ```
-gh attestation verify lookfirst-win32-x64-0.7.0.vsix --repo Idris1980/lookfirst
+gh attestation verify lookfirst-win32-x64-0.8.0.vsix --repo Idris1980/lookfirst
 ```
 
 Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`).

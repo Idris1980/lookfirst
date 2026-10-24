@@ -28,6 +28,12 @@ What is sent, and when:
 
 AI answers can be wrong. Read the change before you apply it.
 
+### Which AI
+
+By default LookFirst uses the AI model you already have in VS Code, such as GitHub Copilot (Copilot Free works), and picks the largest one available. Choose another with `lookFirst.ai.model`.
+
+If you would rather use Claude directly, set `lookFirst.ai.provider` to `anthropic`. The first time, LookFirst asks for an API key from [console.anthropic.com](https://console.anthropic.com/). The key is stored encrypted in VS Code's secret storage, never in settings or files, and is only sent to Anthropic; remove it any time with **LookFirst: Remove Anthropic API Key**. It uses Claude Opus 5.5 unless you set `lookFirst.ai.model` to `sonnet`, `haiku`, `fable` or an exact model id. Use is billed to your Anthropic account, separately from a Claude Pro or Max subscription, which other programs cannot use. Everything else is the same: the masking, the preview before each request, and Apply.
+
 ## What it reads
 
 Terraform, Bicep and ARM templates, docker-compose, Kubernetes manifests, Dockerfiles, Python, JavaScript and TypeScript, shell scripts, PowerShell, package.json and requirements.txt. A folder with several projects gets one picture per project, the riskiest first.
@@ -51,4 +57,5 @@ LookFirst tells you what it found. It cannot promise that code is safe: code tha
 | `lookFirst.path` | (bundled) | Use another lookfirst program. User settings only. |
 | `lookFirst.ai.enabled` | `false` | Allow asking the AI model in VS Code. User settings only. |
 | `lookFirst.ai.showBeforeSending` | `true` | Show what will be sent, and ask, every time. User settings only. |
-| `lookFirst.ai.model` | (largest) | Which AI model to ask, by part of its name, such as `gpt-4.1` or `claude`. User settings only. |
+| `lookFirst.ai.model` | (largest) | Which AI model to ask, by part of its name, such as `gpt-4.1` or `claude`; with Anthropic, `opus` (default), `sonnet`, `haiku`, `fable` or an exact id. User settings only. |
+| `lookFirst.ai.provider` | `vscode` | `vscode` (Copilot or another model in VS Code) or `anthropic` (Claude with your own API key). User settings only. |

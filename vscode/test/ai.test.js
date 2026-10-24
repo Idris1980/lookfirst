@@ -71,3 +71,23 @@ test('findLeftovers finds placeholders an AI left in a fix, not advice in commen
   const html = ai.answerHTML({ title: 'T', fileName: 'main.tf', modelName: 'm', explanation: 'e', code, showHref: 'a', applyHref: 'b' });
   assert.match(html, /placeholders you must fill in yourself/);
 });
+
+test('pickModel takes the largest among the models that match the setting', () => {
+  const models = [
+    { id: 'claude-haiku', family: 'claude-haiku', name: 'Claude Haiku 5.5', maxInputTokens: 1000000 },
+    { id: 'claude-opus', family: 'claude-opus', name: 'Claude Opus 5.5', maxInputTokens: 1000000 },
+    { id: 'gpt-4.1', family: 'gpt-4.1', name: 'GPT-4.1', maxInputTokens: 128000 },
+  ];
+  assert.strictEqual(ai.pickModel(models, 'claude').name, 'Claude Opus 5.5');
+  assert.strictEqual(ai.pickModel(models, 'haiku').name, 'Claude Haiku 5.5');
+});
+
+test('anthropicModel and modelLabel', () => {
+  assert.strictEqual(ai.anthropicModel(''), 'claude-opus-5-5');
+  assert.strictEqual(ai.anthropicModel('Claude'), 'claude-opus-5-5');
+  assert.strictEqual(ai.anthropicModel('sonnet'), 'claude-sonnet-5-5');
+  assert.strictEqual(ai.anthropicModel('claude-haiku-5-5'), 'claude-haiku-5-5');
+  assert.strictEqual(ai.anthropicModel('gpt-4.1'), 'claude-opus-5-5');
+  assert.strictEqual(ai.modelLabel('claude-opus-5-5'), 'Claude Opus 5.5');
+  assert.strictEqual(ai.modelLabel('claude-fable-5-1'), 'Claude Fable 5.1');
+});

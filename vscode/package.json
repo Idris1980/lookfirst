@@ -2,18 +2,38 @@
   "name": "lookfirst",
   "displayName": "LookFirst: See What Code Does Before You Run It",
   "description": "Shows what code would build or do before you run it: a picture of servers, ports, files and websites it touches, and the risks in plain English. Reads the code without running it. Nothing leaves your computer unless you ask the AI to explain a problem, and then you see exactly what is sent.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "idris1980",
   "license": "MIT",
   "icon": "media/icon.png",
-  "repository": { "type": "git", "url": "https://github.com/Idris1980/lookfirst" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Idris1980/lookfirst"
+  },
   "homepage": "https://github.com/Idris1980/lookfirst#readme",
-  "bugs": { "url": "https://github.com/Idris1980/lookfirst/issues" },
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Linters", "Other"],
-  "keywords": ["security", "terraform", "docker", "kubernetes", "ai code", "secrets", "bicep"],
+  "bugs": {
+    "url": "https://github.com/Idris1980/lookfirst/issues"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "security",
+    "terraform",
+    "docker",
+    "kubernetes",
+    "ai code",
+    "secrets",
+    "bicep"
+  ],
   "main": "./extension.js",
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": true,
@@ -38,20 +58,44 @@
         "command": "lookFirst.explain",
         "title": "Explain and Fix the Problem on This Line with AI",
         "category": "LookFirst"
+      },
+      {
+        "command": "lookFirst.setAnthropicKey",
+        "title": "Set Anthropic API Key",
+        "category": "LookFirst"
+      },
+      {
+        "command": "lookFirst.removeAnthropicKey",
+        "title": "Remove Anthropic API Key",
+        "category": "LookFirst"
       }
     ],
     "menus": {
       "editor/title": [
-        { "command": "lookFirst.show", "when": "lookFirst.supported", "group": "navigation" }
+        {
+          "command": "lookFirst.show",
+          "when": "lookFirst.supported",
+          "group": "navigation"
+        }
       ],
       "editor/context": [
-        { "command": "lookFirst.show", "when": "lookFirst.supported", "group": "navigation" }
+        {
+          "command": "lookFirst.show",
+          "when": "lookFirst.supported",
+          "group": "navigation"
+        }
       ],
       "explorer/context": [
-        { "command": "lookFirst.show", "group": "navigation" }
+        {
+          "command": "lookFirst.show",
+          "group": "navigation"
+        }
       ],
       "commandPalette": [
-        { "command": "lookFirst.explain", "when": "lookFirst.supported" }
+        {
+          "command": "lookFirst.explain",
+          "when": "lookFirst.supported"
+        }
       ]
     },
     "configuration": {
@@ -100,9 +144,23 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Which AI model to ask, by part of its name, for example `gpt-4.1` or `claude`. Empty means the largest model available, avoiding small ones such as \"mini\". Can only be set in your own user settings, never by a workspace."
+          "markdownDescription": "Which AI model to ask, by part of its name, for example `gpt-4.1` or `claude`. Empty means the largest model available, avoiding small ones such as \"mini\". With the Anthropic provider: `opus` (the default), `sonnet`, `haiku`, `fable`, or an exact model id such as `claude-sonnet-5-5`. Can only be set in your own user settings, never by a workspace."
+        },
+        "lookFirst.ai.provider": {
+          "type": "string",
+          "enum": ["vscode", "anthropic"],
+          "enumDescriptions": [
+            "The AI model in VS Code, for example GitHub Copilot (Copilot Free works).",
+            "Claude through the Anthropic API with your own API key, billed to your Anthropic account. The key is stored encrypted on this computer."
+          ],
+          "default": "vscode",
+          "scope": "machine",
+          "description": "Where LookFirst sends the request when you ask the AI to explain a problem. Can only be set in your own user settings, never by a workspace."
         }
       }
     }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.133.0"
   }
 }

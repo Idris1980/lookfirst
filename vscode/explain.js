@@ -4,18 +4,31 @@
 // exactly what will be sent, with passwords and keys replaced by
 // placeholders. A suggested fix changes the file only when the user applies
 // it, after seeing the change.
+//
+// The model is either the one in VS Code (the default) or, for those who
+// choose it with lookFirst.ai.provider, Claude through the Anthropic API with
+// their own key, kept in VS Code's secret storage.
 const vscode = require('vscode');
 const path = require('path');
 const ai = require('./ai');
+const anthropic = require('./anthropic');
 
 const SCHEME = 'lookfirst-ai';
+const KEY_STORAGE_ID = 'lookFirst.anthropicApiKey';
+let secrets; // VS Code's secret storage, set in register
 const fixes = new Map(); // id -> { uri, version, start, end, after, title }
 const virtualDocs = new Map(); // virtual document path -> text
 let nextId = 1;
 
 function register(context, h) {
+  secrets = context.secrets;
   const onDidChange = new vscode.EventEmitter();
   context.subscriptions.push(
+    vscode.commands.registerCommand('lookFirst.setAnthropicKey', () => askForKey()),
+    vscode.commands.registerCommand('lookFirst.removeAnthropicKey', async () => {
+      await secrets.delete(KEY_STORAGE_ID);
+      vscode.window.showInformationMessage('LookFirst: the Anthropic API key was removed from this computer.');
+    }),
     onDidChange,
     vscode.workspace.registerTextDocumentContentProvider(SCHEME, {
       onDidChange: onDidChange.event,
@@ -83,12 +96,8 @@ async function explain(h, target, line, title, detail) {
     h.removeScratch(copy);
   }
 
-  const models = await vscode.lm.selectChatModels();
-  if (models.length === 0) {
-    vscode.window.showWarningMessage('LookFirst: there is no AI model in VS Code to ask. Install and sign in to GitHub Copilot, or another extension that provides a language model, and try again.');
-    return;
-  }
-  const model = ai.pickModel(models, vscode.workspace.getConfiguration('lookFirst').get('ai.model'));
+  const model = await chooseModel();
+  if (!model) return;
 
   const fileName = path.basename(doc.fileName);
   const prompt = ai.buildPrompt({
@@ -104,11 +113,10 @@ async function explain(h, target, line, title, detail) {
       title: `LookFirst: asking ${model.name}`,
       cancellable: true,
     }, async (_progress, token) => {
-      const response = await model.sendRequest([vscode.LanguageModelChatMessage.User(prompt)], {
-        justification: 'LookFirst sends a short piece of code around one problem, with passwords and keys replaced, to explain the problem and suggest a fix.',
-      }, token);
-      for await (const chunk of response.text) reply += chunk;
+      reply = await model.ask(prompt, token);
+      if (token.isCancellationRequested) reply = null;
     });
+    if (reply === null) return;
   } catch (err) {
     vscode.window.showErrorMessage('LookFirst: the AI model could not answer: ' + (err && err.message ? err.message : String(err)));
     return;
@@ -139,6 +147,59 @@ async function explain(h, target, line, title, detail) {
   panel.onDidDispose(() => fixes.delete(id));
 }
 
+// chooseModel returns { name, ask(prompt, token) } for the provider the user
+// chose, or undefined when there is nothing to ask.
+async function chooseModel() {
+  const config = vscode.workspace.getConfiguration('lookFirst');
+  const wanted = config.get('ai.model');
+
+  if (config.get('ai.provider') === 'anthropic') {
+    let apiKey = await secrets.get(KEY_STORAGE_ID);
+    if (!apiKey) apiKey = await askForKey();
+    if (!apiKey) return undefined;
+    const id = ai.anthropicModel(wanted);
+    return {
+      name: `${ai.modelLabel(id)} (Anthropic API, your key)`,
+      ask: async (prompt) => (await anthropic.ask({ apiKey, model: id, prompt })).text,
+    };
+  }
+
+  const models = await vscode.lm.selectChatModels();
+  if (models.length === 0) {
+    vscode.window.showWarningMessage('LookFirst: there is no AI model in VS Code to ask. Install and sign in to GitHub Copilot, or another extension that provides a language model, or choose Anthropic in the setting lookFirst.ai.provider.');
+    return undefined;
+  }
+  const model = ai.pickModel(models, wanted);
+  return {
+    name: model.name,
+    ask: async (prompt, token) => {
+      const response = await model.sendRequest([vscode.LanguageModelChatMessage.User(prompt)], {
+        justification: 'LookFirst sends a short piece of code around one problem, with passwords and keys replaced, to explain the problem and suggest a fix.',
+      }, token);
+      let text = '';
+      for await (const chunk of response.text) text += chunk;
+      return text;
+    },
+  };
+}
+
+// askForKey asks for an Anthropic API key and keeps it in VS Code's secret
+// storage, encrypted by the operating system. It is never shown again.
+async function askForKey() {
+  const key = await vscode.window.showInputBox({
+    title: 'LookFirst: Anthropic API key',
+    prompt: 'Paste an API key from console.anthropic.com. It is stored encrypted on this computer and only sent to Anthropic. Use is billed to that Anthropic account.',
+    password: true,
+    ignoreFocusOut: true,
+    placeHolder: 'sk-ant-…',
+    validateInput: (v) => (/^sk-ant-\S{20,}$/.test(v.trim()) ? undefined : 'An Anthropic API key starts with sk-ant-'),
+  });
+  if (!key) return undefined;
+  await secrets.store(KEY_STORAGE_ID, key.trim());
+  vscode.window.showInformationMessage('LookFirst: the Anthropic API key is saved. Remove it any time with "LookFirst: Remove Anthropic API Key".');
+  return key.trim();
+}
+
 // optIn asks once whether the feature may be used at all.
 async function optIn() {
   const config = vscode.workspace.getConfiguration('lookFirst');
@@ -147,7 +208,7 @@ async function optIn() {
     'Use AI to explain problems and suggest fixes?',
     {
       modal: true,
-      detail: 'LookFirst can ask the AI model you already use in VS Code, for example GitHub Copilot, to explain a problem and suggest a fix. '
+      detail: 'LookFirst can ask an AI model to explain a problem and suggest a fix: the one you already use in VS Code, for example GitHub Copilot, or Claude through your own Anthropic API key if you choose that in the setting lookFirst.ai.provider. '
         + 'It sends about 30 lines of code around the problem, with passwords and keys replaced by placeholders such as «SECRET_1». '
         + 'You see exactly what will be sent each time, and nothing is sent unless you choose Send. You can turn this off with the setting lookFirst.ai.enabled.',
     },

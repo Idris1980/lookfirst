@@ -3,3 +3,4 @@ lookfirst-report.html
 vscode/bin/
 *.vsix
 lookfirst-try.html
+vscode/node_modules/

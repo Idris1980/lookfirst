@@ -3,3 +3,10 @@
 bin/SHA256SUMS.txt
 media/icon.svg
 test/**
+node_modules/**/*.d.ts
+node_modules/**/*.d.mts
+node_modules/**/*.d.cts
+node_modules/**/*.mjs
+node_modules/**/*.map
+node_modules/**/src/**
+node_modules/**/*.md
