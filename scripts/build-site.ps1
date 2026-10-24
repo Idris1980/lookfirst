@@ -51,4 +51,18 @@ $examples = foreach ($dir in $titles.Keys) {
 $json = ConvertTo-Json -InputObject @($examples) -Depth 5 -Compress
 Set-Content (Join-Path $out 'examples.js') "window.LOOKFIRST_EXAMPLES = $json;" -Encoding utf8NoBOM
 
+# Stamp every file reference with a hash of what was built, such as
+# app.js?v=3f9a1c2b. Browsers keep files for a while; a new stamp makes
+# them fetch the new version at once instead of mixing old and new files.
+$sha = [Security.Cryptography.SHA256]::Create()
+$parts = Get-ChildItem $out -File | Sort-Object Name | ForEach-Object { [IO.File]::ReadAllBytes($_.FullName) }
+$all = [byte[]]($parts | ForEach-Object { $_ })
+$build = ([BitConverter]::ToString($sha.ComputeHash($all)) -replace '-', '').Substring(0, 12).ToLower()
+foreach ($name in 'index.html', 'app.js') {
+  $path = Join-Path $out $name
+  $text = [IO.File]::ReadAllText($path) -replace '__BUILD__', $build
+  [IO.File]::WriteAllText($path, $text)
+}
+"build $build"
+
 Get-ChildItem $out | ForEach-Object { '{0,10:N0}  {1}' -f $_.Length, $_.Name }

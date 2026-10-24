@@ -19,7 +19,7 @@ function status(text, isError) {
 
 async function load() {
   const go = new Go();
-  const result = await WebAssembly.instantiateStreaming(fetch('lookfirst.wasm'), go.importObject);
+  const result = await WebAssembly.instantiateStreaming(fetch('lookfirst.wasm?v=__BUILD__'), go.importObject);
   go.run(result.instance);
   ready = true;
   $('run-paste').disabled = false;
