@@ -1,0 +1,36 @@
+{
+  "status": "Succeeded",
+  "changes": [
+    {
+      "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-lookfirst-try-test/providers/Microsoft.Storage/storageAccounts/stdemo123",
+      "changeType": "Create",
+      "after": {
+        "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-lookfirst-try-test/providers/Microsoft.Storage/storageAccounts/stdemo123",
+        "name": "stdemo123",
+        "type": "Microsoft.Storage/storageAccounts",
+        "location": "swedencentral",
+        "kind": "StorageV2",
+        "properties": {
+          "allowBlobPublicAccess": true,
+          "minimumTlsVersion": "TLS1_0",
+          "supportsHttpsTrafficOnly": true
+        }
+      }
+    },
+    {
+      "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-lookfirst-try-test/providers/Microsoft.Sql/servers/sql-demo/firewallRules/AllowAll",
+      "changeType": "Create",
+      "after": {
+        "id": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-lookfirst-try-test/providers/Microsoft.Sql/servers/sql-demo/firewallRules/AllowAll",
+        "name": "AllowAll",
+        "type": "Microsoft.Sql/servers/firewallRules",
+        "properties": { "startIpAddress": "0.0.0.0", "endIpAddress": "255.255.255.255" }
+      }
+    },
+    {
+      "resourceId": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-lookfirst-try-test/providers/Microsoft.Old/things/gone",
+      "changeType": "Delete",
+      "before": { "name": "gone" }
+    }
+  ]
+}

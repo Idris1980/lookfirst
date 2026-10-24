@@ -21,15 +21,20 @@ Usage:
   lookfirst read [--out report.html] [--open] [--format text|json|markdown|github]
                  [--fail-on high|medium|low|none] [--changed paths.txt] <file or folder>...
   lookfirst excerpt --line 42 [--context 15] <file>
+  lookfirst try [--deploy] [--keep] [--location swedencentral] [--subscription id]
+                [--parameters file] [--out report.html] <template.bicep|.json>
+  lookfirst try --cleanup
 
 read     reads Terraform, Bicep, ARM, docker-compose, Kubernetes, Dockerfile,
          Python, JavaScript/TypeScript, shell, PowerShell, package.json and
-         requirements.txt.
+         requirements.txt. Nothing is sent anywhere.
 excerpt  prints the lines around a line as JSON, with passwords and keys
          replaced by «SECRET_1» and so on. The VS Code extension uses it
          before it shows code to an AI model.
-
-Nothing is sent anywhere.
+try      compares a Bicep or ARM template with what Azure says it would build
+         (a free what-if preview in a temporary resource group), or with
+         --deploy, with what it really builds there. It asks before creating
+         anything, uses your az login, and deletes the group afterwards.
 `
 
 func main() {
@@ -43,6 +48,8 @@ func main() {
 		err = read(os.Args[2:])
 	case "excerpt":
 		err = excerpt(os.Args[2:])
+	case "try":
+		err = try(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:

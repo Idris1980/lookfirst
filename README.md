@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: Idris1980/lookfirst@v0.6.2
+      - uses: Idris1980/lookfirst@v0.7.0
         with:
           path: .          # files or folders, separated by spaces
           fail-on: high    # or medium, low, none
@@ -86,10 +86,22 @@ In a pull request, LookFirst looks at the change: only the files it changes get 
 
 [idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/) has the same reader, compiled to WebAssembly. Paste code, open files or a folder, or try one of the examples. The page may only load its own files, so there is nowhere your code could be sent. Bicep files are the exception that does not work there, because they need Microsoft's compiler.
 
+### Compare with Azure
+
+Reading has a limit: a template that says nothing about public access can still give you a storage account anyone can read, because that is Azure's default. `lookfirst try` asks Azure itself:
+
+```
+lookfirst try main.bicep            # free: Azure's what-if preview, nothing is built
+lookfirst try --deploy main.bicep   # builds it for real, reads it, deletes it
+lookfirst try --cleanup             # removes groups an interrupted run left behind
+```
+
+It creates an empty, temporary resource group (tagged `lookfirst=try`, with an expiry time), asks Azure what the template would create there, reads Azure's answer with the same rules as the code, and shows what Azure adds: resources the file does not name, and risks that only appear with Azure's defaults. With `--deploy` it builds the resources, reads what was really built, and deletes the group right after. It asks before it creates anything, uses your own `az login`, and deletes the group even if you press Ctrl+C. Bicep and ARM templates for now.
+
 ## Safe by design
 
 - **The code is never run.** It is read as text. Syntax checks ask the language's own parser to read the file (`node --check`, `bash -n`, Python's `ast.parse`, the PowerShell parser), which never runs it. Bicep is compiled locally with `--no-restore`, so no modules are downloaded.
-- **Nothing is sent anywhere** by the program. The only exception is the opt-in AI explanation in VS Code, described above.
+- **Nothing is sent anywhere** by the program. The exceptions are the opt-in AI explanation in VS Code and `lookfirst try`, which sends the template to your own Azure subscription, both described above.
 - **Secrets are masked before anything is shown to an AI model.** Known key formats, values of settings named like passwords, multi-line private keys and long random strings are replaced, and the tests check that no secret in the examples survives masking.
 - **The report runs no scripts.** It is a plain HTML page with a Content-Security-Policy that forbids scripts and network access. In VS Code it is shown with scripts switched off; its links can only open files that are part of the report, or ask the AI (which asks you first). The AI's answer is shown as plain text, never as code that runs.
 - **A workspace cannot change how the extension behaves.** The program it runs and the AI settings can only be set in your own user settings, so a downloaded repository cannot turn on the AI or stop it from asking.
@@ -97,20 +109,20 @@ In a pull request, LookFirst looks at the change: only the files it changes get 
 
 ## Limits
 
-LookFirst tells you what it found. It cannot promise that code is safe: code written to hide what it does can get past any tool that only reads it. A future mode will run code inside an isolated virtual machine and watch what it does.
+LookFirst tells you what it found. It cannot promise that code is safe: code written to hide what it does can get past any tool that only reads it. For Azure templates, `lookfirst try` closes part of that gap by asking Azure what would really be built.
 
 ## Installing
 
 Download the `.vsix` for your platform from [Releases](https://github.com/Idris1980/lookfirst/releases) and install it:
 
 ```
-code --install-extension lookfirst-win32-x64-0.6.2.vsix
+code --install-extension lookfirst-win32-x64-0.7.0.vsix
 ```
 
 Every file in a release is built by GitHub Actions from this repository and signed with Sigstore. Check a file before you install it:
 
 ```
-gh attestation verify lookfirst-win32-x64-0.6.2.vsix --repo Idris1980/lookfirst
+gh attestation verify lookfirst-win32-x64-0.7.0.vsix --repo Idris1980/lookfirst
 ```
 
 Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`).

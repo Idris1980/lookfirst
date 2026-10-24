@@ -73,6 +73,10 @@ type Options struct {
 	// The links are command: URIs that only VS Code acts on, so the page
 	// still needs no JavaScript.
 	VSCode bool
+	// Overview replaces the overview's opening text, and keeps the sections
+	// in the order given instead of putting the riskiest first. lookfirst try
+	// uses it for its fixed order: the difference, the code, Azure.
+	Overview []string
 }
 
 // reveal returns a link that opens file at line in VS Code.
@@ -138,7 +142,9 @@ func HTML(w io.Writer, sections []Section, opt Options) error {
 	for _, f := range all.Findings {
 		p.Counts[f.Severity.String()]++
 	}
-	if p.Multi {
+	if p.Multi && opt.Overview != nil {
+		p.Overall = opt.Overview
+	} else if p.Multi {
 		p.Overall = []string{fmt.Sprintf("%d folders with code were read. Each has its own picture below, the riskiest first.", len(sections))}
 		sort.SliceStable(p.Projects, func(i, j int) bool {
 			a, b := p.Projects[i].Counts, p.Projects[j].Counts
