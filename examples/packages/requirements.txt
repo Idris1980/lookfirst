@@ -1,0 +1,6 @@
+# Python packages for the same project.
+--extra-index-url https://packages.example.com/simple
+requests==2.32.3
+beautifulsup4==4.12.3
+numpy>=1.26
+git+https://github.com/example/private-tool.git

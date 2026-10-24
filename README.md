@@ -11,13 +11,15 @@ It works as a VS Code extension and as a single command-line program, and nothin
 
 ## What it reads
 
-| Infrastructure | Programs |
-| --- | --- |
-| Terraform (Azure, AWS) | Python |
-| Bicep and ARM templates | JavaScript and TypeScript |
-| docker-compose | Shell scripts |
-| Kubernetes manifests | PowerShell |
-| | Dockerfiles |
+| Infrastructure | Programs | Package lists |
+| --- | --- | --- |
+| Terraform (Azure, AWS) | Python | package.json |
+| Bicep and ARM templates | JavaScript and TypeScript | requirements.txt |
+| docker-compose | Shell scripts | |
+| Kubernetes manifests | PowerShell | |
+| | Dockerfiles | |
+
+Point it at a whole repository and each folder with code gets its own picture, with an overview that puts the riskiest first.
 
 ## What it looks for
 
@@ -30,7 +32,8 @@ It works as a VS Code extension and as a single command-line program, and nothin
 - Changes that make something start automatically
 - `rm -rf` on a path that may be empty, and other destructive commands
 - Antivirus, firewall or certificate checks being switched off
-- Package names that look like misspellings of well-known packages
+- Package names that look like misspellings of well-known packages, packages installed straight from an address, and extra package servers
+- npm install scripts that download or run something
 - Privileged containers, the Docker socket mounted into a container, and similar container escapes
 - Syntax errors, using the language's own parser
 
@@ -58,15 +61,34 @@ lookfirst read --format json ./scripts
 
 LookFirst tells you what it found. It cannot promise that code is safe: code written to hide what it does can get past any tool that only reads it. A future mode will run code inside an isolated virtual machine and watch what it does.
 
+## Installing
+
+Download the `.vsix` for your platform from [Releases](https://github.com/Idris1980/lookfirst/releases) and install it:
+
+```
+code --install-extension lookfirst-win32-x64-0.4.0.vsix
+```
+
+Every file in a release is built by GitHub Actions from this repository and signed with Sigstore. Check a file before you install it:
+
+```
+gh attestation verify lookfirst-win32-x64-0.4.0.vsix --repo Idris1980/lookfirst
+```
+
+Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`).
+
 ## Building
 
 Requires Go 1.27 or later.
 
 ```
+go test ./...
 go build -o lookfirst.exe ./cmd/lookfirst
 ```
 
 `scripts/build.ps1` builds the program for Windows, macOS and Linux and puts it in the VS Code extension; `scripts/build.ps1 -Package` also makes one `.vsix` per platform.
+
+The examples in `examples/` contain risky code on purpose, with made-up keys and addresses, and the tests check that every one of them is still found.
 
 ## License
 

@@ -2,7 +2,7 @@
 
 ## Problemet
 
-Utvecklare kopierar kod från AI, kör den och hoppas på det bästa. De vet inte vad som byggs, vilka portar som öppnas, om nycklar ligger i klartext eller vad det kostar. Sandlådan visar det i en bild, med ikoner och en förklaring på vanligt språk, innan något rör den riktiga miljön.
+Utvecklare kopierar kod från AI, kör den och hoppas på det bästa. De vet inte vad som byggs, vilka portar som öppnas, om nycklar ligger i klartext eller vad det kostar. LookFirst visar det i en bild, med ikoner och en förklaring på vanligt språk, innan något rör den riktiga miljön.
 
 ## Grundprinciper
 
@@ -11,7 +11,7 @@ Utvecklare kopierar kod från AI, kör den och hoppas på det bästa. De vet int
 3. **Påverkar ingenting på riktigt.** Läsläget kör aldrig koden. Körläget (senare) kör i en microVM utan riktigt nätverk och med låtsasmoln.
 4. **Kommer till användaren.** Tillägget kontrollerar själv när en fil sparas eller kod klistras in och visar en diskret varning. Man ska inte behöva komma ihåg att kontrollera.
 5. **Aldrig "safe".** Verktyget säger "this is what we found", aldrig att koden är säker. Skicklig skadlig kod kan gömma sig för statisk läsning, och det är det körläget finns till för.
-6. **Engelska i produkten.** Gränssnitt, förklaringar och README är på engelska, men texterna ligger i en språkfil så att svenska kan läggas till senare. Planer och anteckningar skrivs på svenska.
+6. **Engelska i produkten.** Gränssnitt, förklaringar och README är på engelska, men texterna ligger ännu i koden; de ska flyttas till en språkfil innan svenska läggs till. Planer och anteckningar skrivs på svenska.
 
 ## Var den körs
 
@@ -51,14 +51,15 @@ En vanlig webbsida där man klistrar in kod valdes bort som huvudväg. Användar
 ## Status
 
 - **Etapp 0 klar (2026-10-23):** Terraform blir ett diagram, offline.
-- **Etapp 1 till största delen klar (2026-10-23):**
+- **Etapp 1 klar (2026-10-24, v0.4.0):**
   - **Format:** Terraform, Bicep (kompileras lokalt med `--no-restore`), ARM, docker-compose, Kubernetes, Dockerfile, Python, JavaScript/TypeScript, shell och PowerShell.
   - **Skriptregler:** nätverk och misstänkta tjänster, nedladdning som körs, dold kod, känsliga filer, autostart, radering, portar, program som körs, paket (påhittade och felstavade namn mot inbyggda listor), hemligheter, avstängt skydd, SQL byggd av text och osäker inläsning.
   - **Syntaxkontroll:** språkets egen parser (`ast.parse`, `node --check`, `bash -n`, PowerShell Parser). Ingen av dem kör koden.
   - **Layout:** egen kolumnlayout med barycenter-sortering, egna filer för långa linjer och "+N more".
   - **VS Code-tillägg:** "Show in LookFirst", kontroll vid sparande och vid inklistring, Problems-panelen och statusraden. Paketeras per plattform med `scripts/build.ps1 -Package`.
   - **2026-10-24:** klick i bilden öppnar koden på rätt rad, rutorna visar kodens namn och typ, Bicep-symbolnamn, fler Azure-typer och ett falskt larm i ARM rättat (v0.2.1).
-  - **Kvar:** bilden ska delas upp per projekt när man väljer en mapp, `npx`-tolkningen ska rättas, mappar med byggda filer ska hoppas över och programmen kanske samlas i en ruta. Dessutom tester, git-repo, signerade releaser (Sigstore) och SBOM, ett produktnamn och en ikon.
+  - **2026-10-24, resten:** namnet LookFirst och publikt repo Idris1980/lookfirst, en bild per projekt med översikt (riskigast först), package.json och requirements.txt (installationsskript, felstavade paket, paket från adresser, extra paketservrar), rättad tolkning av `npx` och `pip install -r`, mappar med byggda filer och programfiler utan filändelse hoppas över, automatiska tester (exempel, falska larm, rapportens säkerhet), CI och signerade releaser med SBOM via GitHub Actions samt en ikon.
+  - **Öppet:** om programmen som ett skript kör ska samlas i en ruta, och om texterna ska flyttas till en språkfil.
 
 ## Etapper
 

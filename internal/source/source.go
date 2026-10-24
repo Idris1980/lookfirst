@@ -26,12 +26,15 @@ const (
 	Shell      Kind = "shell"
 	PowerShell Kind = "powershell"
 	Dockerfile Kind = "dockerfile"
+	// Package lists: what a program would install.
+	NpmManifest     Kind = "package.json"
+	PipRequirements Kind = "requirements"
 )
 
 // Script reports whether the kind is a program rather than infrastructure.
 func (k Kind) Script() bool {
 	switch k {
-	case Python, JavaScript, Shell, PowerShell, Dockerfile:
+	case Python, JavaScript, Shell, PowerShell, Dockerfile, NpmManifest, PipRequirements:
 		return true
 	}
 	return false
@@ -49,9 +52,12 @@ const (
 	MaxFiles    = 500
 )
 
+// skipDirs hold downloaded or generated files, not the user's own code.
 var skipDirs = map[string]bool{
 	".git": true, ".terraform": true, "node_modules": true, ".venv": true, "venv": true,
 	"__pycache__": true, "dist": true, "build": true, "vendor": true, ".next": true,
+	".vs": true, "obj": true, "coverage": true, ".cache": true, "site-packages": true,
+	".pytest_cache": true, ".mypy_cache": true, ".tox": true, "target": true,
 }
 
 // Collect returns every file we know how to read under the given paths, and
@@ -82,7 +88,7 @@ func Collect(paths []string) (files []File, skipped []string, err error) {
 				}
 				return nil
 			}
-			if d.Type()&fs.ModeSymlink == 0 && guessByName(d.Name()) != "" || shebangCandidate(d.Name()) {
+			if d.Type()&fs.ModeSymlink == 0 && (guessByName(d.Name()) != "" || shebangCandidate(d.Name())) {
 				found = append(found, path)
 			}
 			if len(found) > MaxFiles {
@@ -98,6 +104,12 @@ func Collect(paths []string) (files []File, skipped []string, err error) {
 
 	for _, path := range found {
 		named := contains(paths, path)
+		byName := guessByName(filepath.Base(path))
+		// A file without an extension is only code if it starts with #!.
+		// Programs and other data are passed over without a word.
+		if byName == "" && !named && !startsWithShebang(path) {
+			continue
+		}
 		info, err := os.Stat(path)
 		if err != nil {
 			return nil, nil, err
@@ -106,7 +118,11 @@ func Collect(paths []string) (files []File, skipped []string, err error) {
 			if named {
 				return nil, nil, fmt.Errorf("%s is larger than %d MiB", path, MaxFileSize>>20)
 			}
-			skipped = append(skipped, path)
+			// Large JSON and YAML files are usually data, such as lock
+			// files; only mention files that are certainly code.
+			if byName != "json" && byName != "yaml" && byName != "" {
+				skipped = append(skipped, path)
+			}
 			continue
 		}
 		data, err := os.ReadFile(path)
@@ -170,8 +186,13 @@ var (
 
 func guessByName(name string) Kind {
 	lower := strings.ToLower(name)
-	if lower == "dockerfile" || strings.HasPrefix(lower, "dockerfile.") || strings.HasSuffix(lower, ".dockerfile") {
+	switch {
+	case lower == "dockerfile" || strings.HasPrefix(lower, "dockerfile.") || strings.HasSuffix(lower, ".dockerfile"):
 		return Dockerfile
+	case lower == "package.json":
+		return NpmManifest
+	case strings.HasPrefix(lower, "requirements") && strings.HasSuffix(lower, ".txt"):
+		return PipRequirements
 	}
 	switch filepath.Ext(lower) {
 	case ".tf":
@@ -198,6 +219,17 @@ func guessByName(name string) Kind {
 // their first line.
 func shebangCandidate(name string) bool {
 	return filepath.Ext(name) == "" && !strings.HasPrefix(name, ".")
+}
+
+func startsWithShebang(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	head := make([]byte, 2)
+	n, _ := f.Read(head)
+	return n == 2 && string(head) == "#!"
 }
 
 func contains(list []string, s string) bool {

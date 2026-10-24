@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "adminPassword": { "type": "securestring" },
+    "location": { "type": "string", "defaultValue": "swedencentral" }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2024-04-01",
+      "name": "func-demo",
+      "location": "[parameters('location')]",
+      "properties": {
+        "functionAppConfig": {
+          "deployment": {
+            "storage": {
+              "type": "blobContainer",
+              "value": "https://stdemo.blob.core.windows.net/deploy",
+              "authentication": { "type": "StorageAccountConnectionString", "storageAccountConnectionStringName": "DEPLOYMENT_STORAGE_CONNECTION_STRING" }
+            }
+          }
+        },
+        "siteConfig": {
+          "appSettings": [
+            { "name": "DB_PASSWORD", "value": "@Microsoft.KeyVault(SecretUri=https://kv-demo.vault.azure.net/secrets/db/)" },
+            { "name": "tokenType", "value": "Bearer" }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-03-01",
+      "name": "vm-demo",
+      "location": "[parameters('location')]",
+      "properties": {
+        "osProfile": {
+          "computerName": "vm-demo",
+          "adminUsername": "azureuser",
+          "adminPassword": "[parameters('adminPassword')]"
+        }
+      }
+    }
+  ]
+}

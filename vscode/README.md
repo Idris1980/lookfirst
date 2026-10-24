@@ -14,7 +14,7 @@ Copied some code from an AI assistant or a forum and not sure what it does? Look
 
 ## What it reads
 
-Terraform, Bicep and ARM templates, docker-compose, Kubernetes manifests, Dockerfiles, Python, JavaScript and TypeScript, shell scripts and PowerShell.
+Terraform, Bicep and ARM templates, docker-compose, Kubernetes manifests, Dockerfiles, Python, JavaScript and TypeScript, shell scripts, PowerShell, package.json and requirements.txt. A folder with several projects gets one picture per project, the riskiest first.
 
 ## Safe by design
 

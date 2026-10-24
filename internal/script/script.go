@@ -33,6 +33,7 @@ var Order = []model.Category{model.Internet, model.Compute, model.Data, model.Se
 var friendly = map[source.Kind]string{
 	source.Python: "Python script", source.JavaScript: "JavaScript", source.Shell: "shell script",
 	source.PowerShell: "PowerShell script", source.Dockerfile: "Dockerfile",
+	source.NpmManifest: "npm package list", source.PipRequirements: "pip package list",
 }
 
 func Read(files []source.File) *model.Graph {
@@ -75,6 +76,10 @@ func (s *scan) run() {
 	}
 	s.packages = map[string]int{}
 
+	if s.f.Kind == source.NpmManifest || s.f.Kind == source.PipRequirements {
+		s.manifest()
+		return
+	}
 	s.network()
 	s.downloadAndRun()
 	s.files()
@@ -530,25 +535,72 @@ func (s *scan) packagesUsed() {
 		})
 	}
 	s.each(pipInstall, func(l line, m []string) {
-		for _, a := range strings.Fields(m[1]) {
-			if strings.HasPrefix(a, "-") || strings.Contains(a, "/") || strings.HasPrefix(a, "$") {
-				continue
-			}
-			s.pkg(regexp.MustCompile(`[<>=!~\[;].*`).ReplaceAllString(a, ""), "pip", "installs", l.n)
+		for _, name := range PipInstallArgs(m[1]) {
+			s.pkg(name, "pip", "installs", l.n)
 		}
 	})
 	s.each(npmInstall, func(l line, m []string) {
-		for _, a := range strings.Fields(m[1]) {
-			if strings.HasPrefix(a, "-") || strings.HasPrefix(a, ".") || strings.HasPrefix(a, "$") {
-				continue
-			}
-			name := a
-			if i := strings.LastIndex(a, "@"); i > 0 {
-				name = a[:i]
-			}
+		for _, name := range NpmInstallArgs(m[1], strings.HasPrefix(strings.TrimSpace(m[0]), "npx")) {
 			s.pkg(name, "npm", "installs", l.n)
 		}
 	})
+}
+
+// pipOptionWithValue are pip options whose next word is not a package.
+var pipOptionWithValue = map[string]bool{
+	"-r": true, "--requirement": true, "-c": true, "--constraint": true, "-e": true, "--editable": true,
+	"-i": true, "--index-url": true, "--extra-index-url": true, "-f": true, "--find-links": true,
+	"-t": true, "--target": true, "--prefix": true, "--root": true, "--platform": true,
+	"--python-version": true, "--trusted-host": true, "--proxy": true, "--cache-dir": true,
+}
+
+var versionSpec = regexp.MustCompile(`[<>=!~\[;@].*`)
+
+// PipInstallArgs returns the package names in the words after "pip install".
+func PipInstallArgs(args string) []string {
+	var out []string
+	words := strings.Fields(args)
+	for i := 0; i < len(words); i++ {
+		w := words[i]
+		if pipOptionWithValue[w] {
+			i++ // skip the option's value, e.g. -r requirements.txt
+			continue
+		}
+		if strings.HasPrefix(w, "-") || strings.ContainsAny(w, "/\\$") || strings.HasSuffix(w, ".txt") || strings.HasSuffix(w, ".whl") {
+			continue
+		}
+		if name := strings.Trim(versionSpec.ReplaceAllString(w, ""), `"'`); name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// NpmInstallArgs returns the package names in the words after "npm install",
+// "yarn add" and the like. npx runs a single package: the first word that
+// is not an option; the words after it are that program's own arguments.
+func NpmInstallArgs(args string, npx bool) []string {
+	var out []string
+	for _, w := range strings.Fields(args) {
+		if strings.HasPrefix(w, "-") {
+			continue
+		}
+		if strings.HasPrefix(w, ".") || strings.HasPrefix(w, "$") || strings.Contains(w, "://") || strings.HasPrefix(w, "git+") {
+			if npx {
+				break
+			}
+			continue
+		}
+		name := strings.Trim(w, `"'`)
+		if i := strings.LastIndex(name, "@"); i > 0 {
+			name = name[:i] // drop a version, keep a scope: @scope/pkg@1.2 -> @scope/pkg
+		}
+		out = append(out, name)
+		if npx {
+			break
+		}
+	}
+	return out
 }
 
 func (s *scan) pyPackage(module string, ln int) {

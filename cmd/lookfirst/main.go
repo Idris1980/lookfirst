@@ -58,16 +58,20 @@ func read(args []string) error {
 		return fmt.Errorf("--format must be text or json")
 	}
 
-	g, err := analyze.Paths(fs.Args())
+	projects, err := analyze.Paths(fs.Args())
 	if err != nil {
 		return err
 	}
+	sections := make([]render.Section, len(projects))
+	for i, p := range projects {
+		sections[i] = render.Section{Name: p.Name, Graph: p.Graph}
+	}
 	if *format == "json" {
-		if err := render.JSON(os.Stdout, g); err != nil {
+		if err := render.JSON(os.Stdout, sections); err != nil {
 			return err
 		}
 	} else {
-		render.Text(os.Stdout, g)
+		render.Text(os.Stdout, sections)
 	}
 
 	if *out == "" && *format == "json" {
@@ -80,7 +84,7 @@ func read(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := render.HTML(f, g, render.Options{VSCode: *vscodeLinks}); err != nil {
+	if err := render.HTML(f, sections, render.Options{VSCode: *vscodeLinks}); err != nil {
 		f.Close()
 		return err
 	}

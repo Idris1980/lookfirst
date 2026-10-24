@@ -74,6 +74,7 @@ function supported(doc) {
   if (doc.uri.scheme !== 'file' && doc.uri.scheme !== 'untitled') return false;
   const base = path.basename(doc.fileName).toLowerCase();
   if (base === 'dockerfile' || base.startsWith('dockerfile.') || base.endsWith('.dockerfile')) return true;
+  if (base.startsWith('requirements') && base.endsWith('.txt')) return true;
   if (SUPPORTED_EXT.has(path.extname(base))) return true;
   return doc.isUntitled && LANGUAGE_FILE[doc.languageId] !== undefined;
 }

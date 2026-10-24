@@ -9,7 +9,7 @@ func stripComments(src []byte, kind source.Kind) []byte {
 	out := make([]byte, len(src))
 	copy(out, src)
 
-	hash := kind == source.Python || kind == source.Shell || kind == source.PowerShell || kind == source.Dockerfile
+	hash := kind == source.Python || kind == source.Shell || kind == source.PowerShell || kind == source.Dockerfile || kind == source.PipRequirements
 	slash := kind == source.JavaScript
 	var quote byte    // the open string's quote, or 0
 	triple := false   // Python """ or '''

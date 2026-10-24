@@ -88,25 +88,67 @@ func reveal(opt Options, file string, line int) template.URL {
 	return template.URL("command:lookFirst.reveal?" + url.PathEscape(string(args)))
 }
 
-type page struct {
-	Sources    []string
-	Summary    []string
-	Disclaimer string
-	W, H       int
-	Cols       []svgCol
-	Nodes      []svgNode
-	Edges      []svgEdge
-	Findings   []finding
-	Counts     map[string]int
+// Section is one project in a report: a name and what was found there.
+type Section struct {
+	Name  string
+	Graph *model.Graph
 }
 
-func HTML(w io.Writer, g *model.Graph, opt Options) error {
-	p := page{
-		Sources:    g.Sources,
-		Summary:    explain.Summary(g),
-		Disclaimer: explain.Disclaimer,
-		Counts:     map[string]int{},
+type project struct {
+	Name, Anchor string
+	Summary      []string
+	W, H         int
+	Cols         []svgCol
+	Nodes        []svgNode
+	Edges        []svgEdge
+	Findings     []finding
+	Counts       map[string]int
+}
+
+type page struct {
+	Sources    []string
+	Overall    []string // a summary across projects, when there are several
+	Disclaimer string
+	Counts     map[string]int
+	Projects   []project
+	Multi      bool
+}
+
+// HTML writes the report. With several sections, the riskiest project
+// comes first and an overview at the top links to each one.
+func HTML(w io.Writer, sections []Section, opt Options) error {
+	p := page{Disclaimer: explain.Disclaimer, Counts: map[string]int{}, Multi: len(sections) > 1}
+	all := &model.Graph{}
+	for _, s := range sections {
+		all.Merge(s.Graph)
+		p.Projects = append(p.Projects, buildProject(s, opt))
 	}
+	p.Sources = all.Sources
+	for _, f := range all.Findings {
+		p.Counts[f.Severity.String()]++
+	}
+	if p.Multi {
+		p.Overall = []string{fmt.Sprintf("%d folders with code were read. Each has its own picture below, the riskiest first.", len(sections))}
+		sort.SliceStable(p.Projects, func(i, j int) bool {
+			a, b := p.Projects[i].Counts, p.Projects[j].Counts
+			if a["high"] != b["high"] {
+				return a["high"] > b["high"]
+			}
+			if a["medium"] != b["medium"] {
+				return a["medium"] > b["medium"]
+			}
+			return a["low"] > b["low"]
+		})
+	}
+	for i := range p.Projects {
+		p.Projects[i].Anchor = fmt.Sprintf("project-%d", i+1)
+	}
+	return report.Execute(w, p)
+}
+
+func buildProject(s Section, opt Options) project {
+	g := s.Graph
+	p := project{Name: s.Name, Summary: explain.Summary(g), Counts: map[string]int{}}
 	l := layout(g)
 	p.Cols, p.W, p.H = l.cols, l.w, l.h
 
@@ -171,7 +213,7 @@ func HTML(w io.Writer, g *model.Graph, opt Options) error {
 		p.Findings = append(p.Findings, finding{f.Severity.String(), f.Title, f.Detail, where, box, reveal(opt, f.File, f.Line)})
 		p.Counts[f.Severity.String()]++
 	}
-	return report.Execute(w, p)
+	return p
 }
 
 type place struct{ x, y, col, row int }

