@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- The page may load its own files and nothing else. There is no server
      that could receive your code: the reader runs here, in your browser. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>LookFirst</title>
 <meta name="description" content="See what code does before you run it. Paste code from an AI assistant and get a picture of what it builds and touches, and the risks in plain English. Runs in your browser.">
@@ -77,7 +77,10 @@
   </section>
 
   <section id="result" class="result" hidden>
-    <iframe id="report" title="LookFirst report" sandbox=""></iframe>
+    <!-- No scripts can run in the report: the sandbox does not allow them,
+         and the report's own policy forbids them too. allow-same-origin only
+         lets the report's own links, such as #project-2, scroll within it. -->
+    <iframe id="report" title="LookFirst report" sandbox="allow-same-origin"></iframe>
   </section>
 
   <section class="more">

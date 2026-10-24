@@ -391,6 +391,10 @@ func (s *scan) listening() {
 	s.each(flaskDebug, func(l line, _ []string) {
 		s.add(model.High, "Debug mode is on",
 			"The Flask/Werkzeug debugger lets anyone who can open the page run code on your machine. Never use debug=True outside your own computer.", l.n)
+		// Open to the network, the debugger makes that line the dangerous one.
+		if pyHostAll.MatchString(l.code) {
+			s.g.Expose(s.me, "debugger", true)
+		}
 	})
 }
 

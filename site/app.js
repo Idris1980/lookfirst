@@ -9,6 +9,7 @@ const SKIP = /(^|\/)(node_modules|\.git|\.terraform|\.venv|venv|__pycache__|dist
 
 const $ = (id) => document.getElementById(id);
 let ready = false;
+let reportURL = null;
 
 function status(text, isError) {
   const el = $('status');
@@ -40,7 +41,12 @@ function run(files) {
       return;
     }
     const frame = $('report');
-    frame.srcdoc = reply.html;
+    // The report goes in as a file in the browser's memory (a blob: address)
+    // rather than as srcdoc, so its own links, such as the overview's
+    // "#project-2", stay inside the report instead of loading this page.
+    if (reportURL) URL.revokeObjectURL(reportURL);
+    reportURL = URL.createObjectURL(new Blob([reply.html], { type: 'text/html' }));
+    frame.src = reportURL;
     $('result').hidden = false;
     status(`Read ${files.length} file${files.length === 1 ? '' : 's'}. The report is below.`);
     $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });

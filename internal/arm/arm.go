@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
@@ -134,7 +135,7 @@ func Read(files []source.File) *model.Graph {
 		if bicep {
 			var err error
 			if data, err = compileBicep(f.Path); err != nil {
-				g.Add(model.Medium, "", "Bicep file could not be read", err.Error(), f.Path, 0)
+				g.Add(model.Low, "", "Bicep file could not be read", err.Error(), f.Path, 0)
 				continue
 			}
 		}
@@ -158,6 +159,8 @@ func compileBicep(path string) ([]byte, error) {
 		cmd = exec.CommandContext(ctx, p, "build", path, "--stdout", "--no-restore")
 	} else if p, err := exec.LookPath("az"); err == nil {
 		cmd = exec.CommandContext(ctx, p, "bicep", "build", "--file", path, "--stdout", "--no-restore")
+	} else if runtime.GOOS == "js" {
+		return nil, fmt.Errorf("Bicep needs Microsoft's Bicep compiler, which does not run in a web browser. Check this file with the VS Code extension or the lookfirst program, or compile it to JSON with 'az bicep build' and check the JSON file here")
 	} else {
 		return nil, fmt.Errorf("the Bicep compiler was not found. Install it with 'az bicep install', or compile the file to JSON first with 'az bicep build'")
 	}
@@ -378,17 +381,17 @@ func (r *reader) rules(it *item) {
 	case "microsoft.storage/storageaccounts":
 		if p["allowBlobPublicAccess"] == true {
 			g.Add(model.High, me, "Files can be made public",
-				"allowBlobPublicAccess: true lets containers in this account be readable by anyone on the internet. Set it to false.", r.file, line)
+				"allowBlobPublicAccess: true lets containers in this account be readable by anyone on the internet. Set it to false.", r.file, r.lineAfter("allowBlobPublicAccess", line))
 		}
 		if p["supportsHttpsTrafficOnly"] == false {
 			g.Add(model.Medium, me, "Unencrypted traffic is allowed",
-				"Data can travel over plain HTTP. Set supportsHttpsTrafficOnly to true.", r.file, line)
+				"Data can travel over plain HTTP. Set supportsHttpsTrafficOnly to true.", r.file, r.lineAfter("supportsHttpsTrafficOnly", line))
 		}
 	case "microsoft.storage/storageaccounts/blobservices/containers":
 		if a := str(p["publicAccess"]); strings.EqualFold(a, "Blob") || strings.EqualFold(a, "Container") {
 			g.Expose(me, "public read", true)
 			g.Add(model.High, me, "Files are public",
-				"Anyone on the internet can read the files in this container without logging in. Use publicAccess: None.", r.file, line)
+				"Anyone on the internet can read the files in this container without logging in. Use publicAccess: None.", r.file, r.lineAfter("publicAccess", line))
 		}
 	case "microsoft.sql/servers/firewallrules", "microsoft.dbforpostgresql/flexibleservers/firewallrules", "microsoft.dbformysql/flexibleservers/firewallrules":
 		start, end := r.resolve(str(p["startIpAddress"])), r.resolve(str(p["endIpAddress"]))
@@ -396,23 +399,23 @@ func (r *reader) rules(it *item) {
 		case start == "0.0.0.0" && end == "255.255.255.255":
 			g.Expose(me, "all addresses", true)
 			g.Add(model.High, me, "Database open to the whole internet",
-				"This firewall rule lets every IP address in the world try to connect to the database. Allow only the addresses that need it, or use a private endpoint.", r.file, line)
+				"This firewall rule lets every IP address in the world try to connect to the database. Allow only the addresses that need it, or use a private endpoint.", r.file, r.lineAfter("startIpAddress", line))
 		case start == "0.0.0.0" && end == "0.0.0.0":
 			g.Add(model.Medium, me, "Database open to all of Azure",
-				"This rule allows every Azure service to connect, including services owned by other customers. Prefer a private endpoint.", r.file, line)
+				"This rule allows every Azure service to connect, including services owned by other customers. Prefer a private endpoint.", r.file, r.lineAfter("startIpAddress", line))
 		}
 	case "microsoft.compute/virtualmachines":
 		// A written-out adminPassword is caught by the secret check below.
 		if mapOf(mapOf(p["osProfile"])["linuxConfiguration"])["disablePasswordAuthentication"] == false {
 			g.Add(model.Medium, me, "Password login is allowed",
-				"Passwords can be guessed. Use SSH keys only by setting disablePasswordAuthentication to true.", r.file, line)
+				"Passwords can be guessed. Use SSH keys only by setting disablePasswordAuthentication to true.", r.file, r.lineAfter("disablePasswordAuthentication", line))
 		}
 	}
 
 	for _, key := range []string{"minimumTlsVersion", "minimalTlsVersion", "minTlsVersion"} {
 		if v := str(p[key]); v == "TLS1_0" || v == "TLS1_1" || v == "1.0" || v == "1.1" {
 			g.Add(model.Medium, me, "Old TLS version allowed",
-				fmt.Sprintf("%s = %q allows encryption that is no longer considered safe. Use TLS 1.2 or newer.", key, v), r.file, line)
+				fmt.Sprintf("%s = %q allows encryption that is no longer considered safe. Use TLS 1.2 or newer.", key, v), r.file, r.lineAfter(key, line))
 		}
 	}
 	walkStrings(p, func(key, s string) {

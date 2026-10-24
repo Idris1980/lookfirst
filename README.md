@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: Idris1980/lookfirst@v0.6.0
+      - uses: Idris1980/lookfirst@v0.6.1
         with:
           path: .          # files or folders, separated by spaces
           fail-on: high    # or medium, low, none
@@ -104,13 +104,13 @@ LookFirst tells you what it found. It cannot promise that code is safe: code wri
 Download the `.vsix` for your platform from [Releases](https://github.com/Idris1980/lookfirst/releases) and install it:
 
 ```
-code --install-extension lookfirst-win32-x64-0.6.0.vsix
+code --install-extension lookfirst-win32-x64-0.6.1.vsix
 ```
 
 Every file in a release is built by GitHub Actions from this repository and signed with Sigstore. Check a file before you install it:
 
 ```
-gh attestation verify lookfirst-win32-x64-0.6.0.vsix --repo Idris1980/lookfirst
+gh attestation verify lookfirst-win32-x64-0.6.1.vsix --repo Idris1980/lookfirst
 ```
 
 Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`).

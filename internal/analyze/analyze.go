@@ -119,11 +119,19 @@ func Files(files []source.File) *model.Graph {
 // file. Lines that are only a comment are skipped: "# replace with your IP"
 // is advice, not a leftover.
 func leftovers(g *model.Graph, files []source.File) {
+	// A line that already has a high finding, such as a password written in
+	// the code, says enough; one problem per line is easier to act on.
+	serious := map[string]bool{}
+	for _, f := range g.Findings {
+		if f.Severity == model.High {
+			serious[fmt.Sprintf("%s:%d", f.File, f.Line)] = true
+		}
+	}
 	for _, f := range files {
 		node := "script." + f.Path // the box for a script, if there is one
 		for i, line := range strings.Split(string(f.Data), "\n") {
 			t := strings.TrimSpace(line)
-			if strings.HasPrefix(t, "#") || strings.HasPrefix(t, "//") {
+			if strings.HasPrefix(t, "#") || strings.HasPrefix(t, "//") || serious[fmt.Sprintf("%s:%d", f.Path, i+1)] {
 				continue
 			}
 			for _, v := range risk.Leftovers(line) {
