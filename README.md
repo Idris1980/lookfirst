@@ -80,7 +80,7 @@ jobs:
           fail-on: high    # or medium, low, none
 ```
 
-The action builds LookFirst from the source of the version you name, so what runs is exactly the code in this repository. It needs no secrets, and in pull requests from forks it still marks the lines; only the comment is skipped.
+In a pull request, only the files it changes get markings on their lines, so old problems elsewhere do not crowd out the new ones; the summary and the report still cover everything that was read. The action builds LookFirst from the source of the version you name, so what runs is exactly the code in this repository. It needs no secrets, and in pull requests from forks it still marks the lines; only the comment is skipped.
 
 ### In the browser
 

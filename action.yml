@@ -49,11 +49,23 @@ runs:
       shell: bash
       env:
         LF_PATHS: ${{ inputs.path }}
+        GH_TOKEN: ${{ github.token }}
+        PR: ${{ github.event.pull_request.number }}
       run: |
         read -ra paths <<< "$LF_PATHS"
         lf="$RUNNER_TEMP/lookfirst"
-        # Each finding shows on its line in the pull request.
-        "$lf" read --format github "${paths[@]}"
+        # Each finding shows on its line. In a pull request only the files it
+        # changes are marked: GitHub shows ten markings of each kind per step,
+        # and old problems elsewhere would crowd out the new ones.
+        if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "$PR" ] &&
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --paginate --jq '.[].filename' > "$RUNNER_TEMP/changed.txt"; then
+          "$lf" read --format github "${paths[@]}" | while IFS= read -r line; do
+            file="${line#*,file=}"; file="${file%%,*}"; file="${file%%::*}"
+            if grep -qxF -- "$file" "$RUNNER_TEMP/changed.txt"; then echo "$line"; fi
+          done
+        else
+          "$lf" read --format github "${paths[@]}"
+        fi
         # A summary for the run page and the comment, and the full picture to download.
         "$lf" read --format markdown --out "$RUNNER_TEMP/lookfirst-report.html" "${paths[@]}" > "$RUNNER_TEMP/lookfirst.md"
         cat "$RUNNER_TEMP/lookfirst.md" >> "$GITHUB_STEP_SUMMARY"
