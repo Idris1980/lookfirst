@@ -78,3 +78,36 @@ func TestClipCode(t *testing.T) {
 		t.Errorf("clipCode changed a short name: %q", got)
 	}
 }
+
+func TestGitHubCommandsCannotBeInjected(t *testing.T) {
+	g := &model.Graph{}
+	g.Add(model.High, "", "Bad, title: x", "line one\n::set-env name=X::evil\r\n%0A", "dir/a,b:c.tf", 7)
+	var buf bytes.Buffer
+	GitHub(&buf, []Section{{Name: "x", Graph: g}})
+	out := buf.String()
+	if strings.Count(out, "\n") != 1 {
+		t.Fatalf("one finding became several lines:\n%s", out)
+	}
+	if !strings.HasPrefix(out, "::error title=LookFirst%3A Bad%2C title%3A x,file=dir/a%2Cb%3Ac.tf,line=7::line one%0A::set-env") {
+		t.Errorf("unexpected command:\n%s", out)
+	}
+	// The literal "%0A" in the text must stay text, not become a new line.
+	if !strings.Contains(out, "%250A") {
+		t.Errorf("percent signs in the text must be escaped too:\n%s", out)
+	}
+}
+
+func TestMarkdownEscapesCode(t *testing.T) {
+	g := &model.Graph{}
+	g.Add(model.Medium, "", "Package name looks like a misspelling", `"![x](https://evil.example/p.png)" <img src=x>`, "package.json", 3)
+	var buf bytes.Buffer
+	Markdown(&buf, []Section{{Name: "x", Graph: g}})
+	out := buf.String()
+	// Escaped, the text is shown as written: \! \[ \( and \< are not syntax.
+	if strings.Contains(out, "![x](") || strings.Contains(strings.ReplaceAll(out, `\<`, ""), "<img") {
+		t.Errorf("markdown from the code was not escaped:\n%s", out)
+	}
+	if !strings.Contains(out, "0 high · 1 medium · 0 low") {
+		t.Errorf("counts missing:\n%s", out)
+	}
+}

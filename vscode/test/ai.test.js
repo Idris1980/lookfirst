@@ -64,3 +64,10 @@ test('pickModel prefers a large model, and the setting wins', () => {
   assert.strictEqual(ai.pickModel(models, 'no-such-model').name, 'Claude Sonnet');
   assert.strictEqual(ai.pickModel([models[0]], '').name, 'GPT-4o mini');
 });
+
+test('findLeftovers finds placeholders an AI left in a fix, not advice in comments', () => {
+  const code = '  # Replace with your actual IP address\n  source_address_prefix = "YOUR_IP_ADDRESS"\n  tenant = "<your-tenant-id>"\n  name = "nsg-demo"';
+  assert.deepStrictEqual(ai.findLeftovers(code), ['YOUR_IP_ADDRESS', '<your-tenant-id>']);
+  const html = ai.answerHTML({ title: 'T', fileName: 'main.tf', modelName: 'm', explanation: 'e', code, showHref: 'a', applyHref: 'b' });
+  assert.match(html, /placeholders you must fill in yourself/);
+});

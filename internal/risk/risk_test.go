@@ -72,3 +72,31 @@ func TestFromAnywhere(t *testing.T) {
 		t.Error("a private range was taken for everyone")
 	}
 }
+
+func TestLeftovers(t *testing.T) {
+	found := map[string]string{
+		`source_address_prefix = "YOUR_IP_ADDRESS"`:          "YOUR_IP_ADDRESS",
+		`subscription_id = "<your-subscription-id>"`:         "<your-subscription-id>",
+		`password: "CHANGE_ME"`:                              "CHANGE_ME",
+		`"tenantId": "00000000-0000-0000-0000-000000000000"`: "00000000-0000-0000-0000-000000000000",
+		`host = 'replace-with-your-host'`:                    "replace-with-your-host",
+		`ip = "xxx.xxx.xxx.xxx"`:                             "xxx.xxx.xxx.xxx",
+	}
+	for line, want := range found {
+		got := Leftovers(line)
+		if len(got) != 1 || got[0] != want {
+			t.Errorf("Leftovers(%q) = %q, want %q", line, got, want)
+		}
+	}
+	for _, line := range []string{
+		`# Replace with your actual IP address`,
+		`name = "yourstore-prod"`,
+		`description = "Stores your files"`,
+		`source_address_prefix = "203.0.113.10/32"`,
+		`image = "myregistry.azurecr.io/shop:1.0"`,
+	} {
+		if got := Leftovers(line); len(got) != 0 {
+			t.Errorf("Leftovers(%q) = %q, want none", line, got)
+		}
+	}
+}

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The page may load its own files and nothing else. There is no server
+     that could receive your code: the reader runs here, in your browser. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>LookFirst</title>
+<meta name="description" content="See what code does before you run it. Paste code from an AI assistant and get a picture of what it builds and touches, and the risks in plain English. Runs in your browser.">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap brand">
+    <img src="icon.svg" alt="" width="36" height="36">
+    <div>
+      <h1>LookFirst</h1>
+      <p>See what code does before you run it.</p>
+    </div>
+    <a class="gh" href="https://github.com/Idris1980/lookfirst">GitHub</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="intro">
+    <p class="lead">Copied code from an AI assistant, a forum or a tutorial? LookFirst reads it, <strong>without running it</strong>, and shows what it would build or touch: servers, open ports, files on your computer, websites it talks to, packages it installs. Then it explains the risks in plain English.</p>
+    <p class="privacy"><span aria-hidden="true">🔒</span> Everything happens in your browser. Your code is not sent anywhere: this page can only load its own files.</p>
+  </section>
+
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-paste" aria-controls="panel-paste" aria-selected="true">Paste code</button>
+      <button role="tab" id="tab-files" aria-controls="panel-files" aria-selected="false">Open files</button>
+      <button role="tab" id="tab-examples" aria-controls="panel-examples" aria-selected="false">Try an example</button>
+    </div>
+
+    <div role="tabpanel" id="panel-paste" aria-labelledby="tab-paste">
+      <label for="code" class="label">Paste the code you want to check</label>
+      <textarea id="code" spellcheck="false" placeholder="For example a Terraform file, a docker-compose file, a Python script or a shell command from a chat answer"></textarea>
+      <div class="row">
+        <label for="kind" class="label inline">What kind of code is it?</label>
+        <select id="kind">
+          <option value="">Work it out for me</option>
+          <option value="main.tf">Terraform</option>
+          <option value="azuredeploy.json">ARM template (JSON)</option>
+          <option value="docker-compose.yml">docker-compose</option>
+          <option value="manifest.yaml">Kubernetes</option>
+          <option value="Dockerfile">Dockerfile</option>
+          <option value="script.py">Python</option>
+          <option value="script.js">JavaScript or TypeScript</option>
+          <option value="script.sh">Shell script or commands</option>
+          <option value="script.ps1">PowerShell</option>
+          <option value="package.json">package.json</option>
+          <option value="requirements.txt">requirements.txt</option>
+        </select>
+        <button id="run-paste" class="primary" disabled>Look first</button>
+      </div>
+    </div>
+
+    <div role="tabpanel" id="panel-files" aria-labelledby="tab-files" hidden>
+      <p class="hint">Choose files, or a whole folder. They are read here and never uploaded.</p>
+      <div class="row">
+        <label class="button">Choose files<input id="pick-files" type="file" multiple hidden></label>
+        <label class="button">Choose a folder<input id="pick-folder" type="file" webkitdirectory hidden></label>
+      </div>
+    </div>
+
+    <div role="tabpanel" id="panel-examples" aria-labelledby="tab-examples" hidden>
+      <p class="hint">Code of the kind AI assistants often write. Each one has risks on purpose; the keys and addresses are made up.</p>
+      <div id="examples" class="examples"></div>
+    </div>
+
+    <p id="status" class="status" role="status">Loading the reader…</p>
+  </section>
+
+  <section id="result" class="result" hidden>
+    <iframe id="report" title="LookFirst report" sandbox=""></iframe>
+  </section>
+
+  <section class="more">
+    <h2>Use it where your code is</h2>
+    <div class="cards">
+      <div><h3>VS Code</h3><p>Checks files as you open, save or paste them, puts the problems in the editor, and can ask the AI you already use to explain and fix them. <a href="https://github.com/Idris1980/lookfirst/releases">Download</a></p></div>
+      <div><h3>Pull requests</h3><p>A GitHub Action marks problems on the changed lines and sums them up in the pull request. <a href="https://github.com/Idris1980/lookfirst#on-github">How to add it</a></p></div>
+      <div><h3>Command line</h3><p>One program for Windows, macOS and Linux: <code>lookfirst read ./infra</code>. <a href="https://github.com/Idris1980/lookfirst/releases">Download</a></p></div>
+    </div>
+    <p class="fine">LookFirst tells you what it found by reading the code. It cannot promise that code is safe: code written to hide what it does can get past any tool that only reads it.</p>
+  </section>
+</main>
+
+<script src="wasm_exec.js"></script>
+<script src="examples.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

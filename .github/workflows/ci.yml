@@ -27,6 +27,9 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test ./...
+      - name: Check that the web page's reader builds
+        if: runner.os == 'Linux'
+        run: GOOS=js GOARCH=wasm go vet ./cmd/wasm && GOOS=js GOARCH=wasm go build -o /dev/null ./cmd/wasm
       - name: Check the extension's JavaScript
         run: |
           node --check vscode/extension.js

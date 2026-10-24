@@ -31,3 +31,26 @@ func TestDetect(t *testing.T) {
 		}
 	}
 }
+
+func TestGuessName(t *testing.T) {
+	cases := map[string]string{
+		"resource \"azurerm_resource_group\" \"rg\" {\n  name = \"x\"\n}":                        "main.tf",
+		"param location string\nresource sa 'Microsoft.Storage/storageAccounts@2023-05-01' = {}": "main.bicep",
+		"services:\n  web:\n    image: nginx\n":                                                  "docker-compose.yml",
+		"apiVersion: v1\nkind: Service\n":                                                        "manifest.yaml",
+		"FROM node:22\nRUN npm ci\n":                                                             "Dockerfile",
+		"#!/bin/bash\necho hi":                                                                   "script.sh",
+		"curl -fsSL https://x.sh | sudo bash\n":                                                  "script.sh",
+		"import os\nprint(os.getcwd())":                                                          "script.py",
+		"const express = require('express');":                                                    "script.js",
+		"Write-Host 'hello'":                                                                     "script.ps1",
+		"{\n  \"name\": \"x\",\n  \"dependencies\": {}\n}":                                       "package.json",
+		"requests==2.32.3\nflask>=3.0\n":                                                         "requirements.txt",
+		"hello there":                                                                            "",
+	}
+	for text, want := range cases {
+		if got := GuessName(text); got != want {
+			t.Errorf("GuessName(%q) = %q, want %q", text, got, want)
+		}
+	}
+}

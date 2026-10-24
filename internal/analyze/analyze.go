@@ -12,6 +12,7 @@ import (
 	"github.com/Idris1980/lookfirst/internal/compose"
 	"github.com/Idris1980/lookfirst/internal/kubernetes"
 	"github.com/Idris1980/lookfirst/internal/model"
+	"github.com/Idris1980/lookfirst/internal/risk"
 	"github.com/Idris1980/lookfirst/internal/script"
 	"github.com/Idris1980/lookfirst/internal/source"
 	"github.com/Idris1980/lookfirst/internal/terraform"
@@ -34,9 +35,28 @@ func Paths(paths []string) ([]Project, error) {
 		return nil, err
 	}
 	if len(files) == 0 {
-		return nil, fmt.Errorf("found nothing we can read. Supported: Terraform, Bicep, ARM, docker-compose, Kubernetes, Dockerfile, Python, JavaScript/TypeScript, shell, PowerShell, package.json and requirements.txt")
+		return nil, ErrNothing
 	}
+	projects := Group(files)
+	for _, p := range skipped {
+		g := projects[0].Graph
+		for _, pr := range projects {
+			if filepath.Dir(p) == pr.Dir {
+				g = pr.Graph
+			}
+		}
+		g.Add(model.Low, "", "File skipped", fmt.Sprintf("The file is larger than %d MiB and was not read.", source.MaxFileSize>>20), p, 0)
+		g.Sort()
+	}
+	return projects, nil
+}
 
+// ErrNothing means none of the files is a kind LookFirst can read.
+var ErrNothing = fmt.Errorf("found nothing we can read. Supported: Terraform, Bicep, ARM, docker-compose, Kubernetes, Dockerfile, Python, JavaScript/TypeScript, shell, PowerShell, package.json and requirements.txt")
+
+// Group reads files that are already in memory, one project per folder.
+// The web page uses it for files the visitor opens or pastes.
+func Group(files []source.File) []Project {
 	byDir := map[string][]source.File{}
 	for _, f := range files {
 		dir := filepath.Dir(f.Path)
@@ -53,17 +73,7 @@ func Paths(paths []string) ([]Project, error) {
 	for _, d := range dirs {
 		projects = append(projects, Project{Name: projectName(root, d), Dir: d, Graph: Files(byDir[d])})
 	}
-	for _, p := range skipped {
-		g := projects[0].Graph
-		for _, pr := range projects {
-			if filepath.Dir(p) == pr.Dir {
-				g = pr.Graph
-			}
-		}
-		g.Add(model.Low, "", "File skipped", fmt.Sprintf("The file is larger than %d MiB and was not read.", source.MaxFileSize>>20), p, 0)
-		g.Sort()
-	}
-	return projects, nil
+	return projects
 }
 
 // Files reads files that belong together into one picture.
@@ -100,8 +110,27 @@ func Files(files []source.File) *model.Graph {
 	if allScripts {
 		g.Titles, g.Order = script.Titles, script.Order
 	}
+	leftovers(g, files)
 	g.Sort()
 	return g
+}
+
+// leftovers reports placeholders such as "YOUR_IP_ADDRESS" in any kind of
+// file. Lines that are only a comment are skipped: "# replace with your IP"
+// is advice, not a leftover.
+func leftovers(g *model.Graph, files []source.File) {
+	for _, f := range files {
+		node := "script." + f.Path // the box for a script, if there is one
+		for i, line := range strings.Split(string(f.Data), "\n") {
+			t := strings.TrimSpace(line)
+			if strings.HasPrefix(t, "#") || strings.HasPrefix(t, "//") {
+				continue
+			}
+			for _, v := range risk.Leftovers(line) {
+				g.Add(model.Medium, node, "Placeholder left in the code", risk.LeftoverAdvice(v), f.Path, i+1)
+			}
+		}
+	}
 }
 
 // Merge puts every project into one graph, for totals and for tools that

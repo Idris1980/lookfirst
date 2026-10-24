@@ -89,9 +89,11 @@ function escapeHTML(s) {
 // the two commands passed in, which VS Code allows for this panel alone.
 function answerHTML({ title, fileName, modelName, explanation, code, showHref, applyHref }) {
   const paragraphs = explanation.split(/\n\s*\n/).map((p) => `<p>${escapeHTML(p.trim())}</p>`).join('\n');
+  const left = code === null ? [] : findLeftovers(code);
+  const warning = left.length === 0 ? '' : `<p class="warning">The suggestion contains ${left.length === 1 ? 'a placeholder' : 'placeholders'} you must fill in yourself: ${left.map((v) => `<code>${escapeHTML(v)}</code>`).join(', ')}. Until you do, the code will not work as intended.</p>`;
   const actions = code === null
     ? '<p class="note">The answer did not include fixed code in the expected form, so there is nothing to apply.</p>'
-    : `<p class="actions"><a class="button" href="${escapeHTML(showHref)}" title="Compare your code with the suggested fix, side by side">Show the change</a>
+    : `${warning}<p class="actions"><a class="button" href="${escapeHTML(showHref)}" title="Compare your code with the suggested fix, side by side">Show the change</a>
        <a class="button secondary" href="${escapeHTML(applyHref)}" title="Put the suggested fix into ${escapeHTML(fileName)}. You are asked first, and Ctrl+Z undoes it">Apply to ${escapeHTML(fileName)}</a></p>
        <p class="note">Nothing changes in your file until you choose Apply, and you can undo it afterwards. Read the change first: the suggestion comes from an AI model and can be wrong.</p>
        <h2>Suggested code</h2><pre>${escapeHTML(code)}</pre>`;
@@ -108,6 +110,7 @@ pre { background: var(--vscode-textCodeBlock-background); padding: 12px; border-
 .button { background: var(--vscode-button-background); color: var(--vscode-button-foreground); padding: 6px 14px; border-radius: 4px; text-decoration: none; }
 .button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
 .note { color: var(--vscode-descriptionForeground); font-size: 12.5px; }
+.warning { border-left: 3px solid var(--vscode-editorWarning-foreground, #b35900); padding: 6px 10px; background: var(--vscode-inputValidation-warningBackground, transparent); }
 </style></head>
 <body>
 <h1>${escapeHTML(title)}</h1>
@@ -115,6 +118,21 @@ pre { background: var(--vscode-textCodeBlock-background); padding: 12px; border-
 ${paragraphs}
 ${actions}
 </body></html>`;
+}
+
+// findLeftovers returns placeholders such as "YOUR_IP_ADDRESS" in code. It
+// matches the same patterns as the lookfirst program (internal/risk), so the
+// panel warns about what LookFirst would report after Apply.
+const LEFTOVER = /["'`]((?:your|my)[_-][a-z0-9_.-]+|<[^<>"'`\n]*\byour\b[^<>"'`\n]*>|replace[_-]?(?:me|this|with[_-][a-z0-9_-]+)|change[_-]?me|insert[_-][a-z0-9_-]+|xxx\.xxx\.xxx\.xxx|0{8}-0{4}-0{4}-0{4}-0{12})["'`]/gi;
+
+function findLeftovers(code) {
+  const found = new Set();
+  for (const line of String(code).split('\n')) {
+    const t = line.trim();
+    if (t.startsWith('#') || t.startsWith('//')) continue;
+    for (const m of line.matchAll(LEFTOVER)) found.add(m[1]);
+  }
+  return [...found];
 }
 
 // pickModel chooses which language model to ask. A name in the setting
@@ -141,4 +159,4 @@ function replaceLines(text, start, end, code) {
   return lines.join(eol);
 }
 
-module.exports = { languageName, buildPrompt, parseAnswer, restoreSecrets, escapeHTML, answerHTML, pickModel, replaceLines };
+module.exports = { languageName, buildPrompt, parseAnswer, restoreSecrets, escapeHTML, answerHTML, findLeftovers, pickModel, replaceLines };

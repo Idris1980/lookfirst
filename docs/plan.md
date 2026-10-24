@@ -61,6 +61,7 @@ En vanlig webbsida där man klistrar in kod valdes bort som huvudväg. Användar
   - **2026-10-24, resten:** namnet LookFirst och publikt repo Idris1980/lookfirst, en bild per projekt med översikt (riskigast först), package.json och requirements.txt (installationsskript, felstavade paket, paket från adresser, extra paketservrar), rättad tolkning av `npx` och `pip install -r`, mappar med byggda filer och programfiler utan filändelse hoppas över, automatiska tester (exempel, falska larm, rapportens säkerhet), CI och signerade releaser med SBOM via GitHub Actions samt en ikon.
   - **Öppet:** om programmen som ett skript kör ska samlas i en ruta, och om texterna ska flyttas till en språkfil.
 - **Etapp 2 klar (2026-10-24, v0.5.0):** "Explain and fix with AI" via VS Codes språkmodell-API (användarens Copilot eller liknande, ingen egen nyckel). Funktionen är avstängd tills användaren slår på den, och användaren ser exakt vad som skickas varje gång. Cirka 30 rader skickas, maskerade med `lookfirst excerpt` (kända nyckelformat, värden med lösenordsliknande namn, värden på raden efter namnet, PEM-block och långa slumpsträngar). Originalen läggs tillbaka bara lokalt. Svaret är på VS Codes språk och visas som ren text. Förslaget visas som en jämförelse och ändrar filen först vid Apply, som kan ångras. AI-inställningarna har scope machine, så att ett repo inte kan slå på AI eller stänga av frågan. Tester: varje exempel maskeras och läses om, och inget hemligt får finnas kvar. Tilläggets AI-hjälp testas med `node --test` i CI.
+- **Etapp 3 klar (2026-10-24, v0.6.0):** webbsidan (site/ + cmd/wasm, motorn som WebAssembly, CSP som bara tillåter sidans egna filer, exempel och länkar som #example=python-helper, publiceras med pages.yml på idris1980.github.io/lookfirst), GitHub Action (action.yml: bygger från källkoden, markeringar på raderna med `--format github`, sammanfattning och kommentar med `--format markdown`, rapporten som artefakt, `--fail-on`, indata via miljövariabler mot injektion, repot granskar sina egna PR:er med lookfirst.yml), varning för platshållare i koden och i AI-förslag. Escapning av text från den granskade koden testas för både GitHub-kommandon och Markdown.
 
 ## Etapper
 
@@ -83,8 +84,9 @@ En vanlig webbsida där man klistrar in kod valdes bort som huvudväg. Användar
 - Förklaring i vanligt språk och förslag på rättad kod.
 
 ### Etapp 3 – skyltfönster och CI
-- Webbsida med färdiga exempel, där motorn körs via WASM och CSP `connect-src 'none'` gäller.
-- GitHub Action: rapport och diagram i varje pull request som ändrar IaC.
+- Webbsida med färdiga exempel. Motorn körs i webbläsaren via WASM, och sidan får bara hämta sina egna filer (CSP `connect-src 'self'`). Det finns ingen server som kan ta emot koden.
+- GitHub Action som andra kan använda: markeringar direkt på kodraderna i pull requests, en sammanfattning i körningen, rapporten som nedladdningsbar fil, en kommentar på pull requesten och möjlighet att stoppa vid till exempel "high".
+- Varning för platshållare (`YOUR_IP_ADDRESS`, `REPLACE_ME` och liknande), både i koden och i AI-förslag innan Apply. Lärdom från etapp 2.
 
 ### Etapp 4 – Run-läge
 - microVM (Firecracker eller gVisor), inget nätverk som standard, låtsasmoln (LocalStack, Azurite).
@@ -93,7 +95,24 @@ En vanlig webbsida där man klistrar in kod valdes bort som huvudväg. Användar
 - Tidslinje som spelar upp vad som hände.
 
 ### Etapp 5 – bron till Cleanroom
-- "Run this for real, temporarily" startar en tillfällig Azure-miljö via Cleanroom och river den efteråt.
+
+**Problemet:** läsning har en gräns. LookFirst ser vad som står i koden, men inte Azures standardvärden, moduler, variabler eller det som räknas fram först när koden körs. Ett lagringskonto där koden inte säger något om publik åtkomst kan ändå bli nåbart från internet. Det syns först när resursen finns.
+
+**Lösningen:** knappen "Try it for real, temporarily" i LookFirst-bilden.
+
+1. **LookFirst läser först.** Vid allvarliga risker varnar den innan något byggs.
+2. **Cleanroom skapar en avgränsad resursgrupp** med skyddsräcken: Azure Policy som förbjuder publika IP-adresser och öppna portar, tillåter bara billiga storlekar, sätter en kostnadsgräns (budget) och river gruppen automatiskt efter en viss tid (till exempel 2 timmar), även om användaren glömmer.
+3. **Koden körs på riktigt** i gruppen (`terraform apply` med tillståndet i miljön, eller `az deployment group create`).
+4. **LookFirst läser av vad som faktiskt byggdes** (Azure Resource Graph) och ritar det bredvid bilden från koden: plan mot verklighet. Till exempel "koden sa inget om publik åtkomst, men kontot blev publikt" eller "den här resursen fanns inte i koden, den kom från en modul".
+5. **Miljön rivs**, och rapporten visar vad som byggdes, månadskostnaden och skillnaderna mot koden.
+
+Om ett skyddsräcke stoppar något är det också ett resultat: "den här koden kräver en publik IP-adress".
+
+**Körläget från etapp 4 kan också använda Cleanroom:** skript körs i en avstängd container i Azure (utan internet, med fällnycklar) i stället för att kräva Linux och virtualisering på användarens dator.
+
+**Svårigheter:** kostnaden på användarens eget abonnemang (automatisk rivning och budget är grunden, inte tillval), tiden (en SQL-server tar ungefär 5 minuter), bara Azure till att börja med och Terraform-tillståndet som måste rivas med miljön.
+
+**Varför det är intressant:** hela kedjan läsa, prova avgränsat, jämföra och riva i ett och samma flöde. Befintliga verktyg gör antingen läsningen (Checkov, tfsec) eller den tillfälliga miljön, men inte båda med en jämförelse.
 
 ## Öppna frågor
 - Produktnamn och om repot ska vara publikt (öppen källkod som Cleanroom?).

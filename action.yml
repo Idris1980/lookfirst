@@ -1,0 +1,97 @@
+name: LookFirst
+description: Shows what code would build or do, and the risks in it, on every pull request. Reads the code without running it.
+author: Idris1980
+branding:
+  icon: eye
+  color: green
+
+inputs:
+  path:
+    description: Files or folders to read, separated by spaces.
+    default: "."
+  fail-on:
+    description: "Fail the check if there is a finding this severe or worse: high, medium, low or none."
+    default: none
+  comment:
+    description: "Post the summary as a comment on the pull request and keep it up to date. Needs permissions: pull-requests: write."
+    default: "true"
+
+outputs:
+  high:
+    description: Number of high findings.
+    value: ${{ steps.read.outputs.high }}
+  medium:
+    description: Number of medium findings.
+    value: ${{ steps.read.outputs.medium }}
+  low:
+    description: Number of low findings.
+    value: ${{ steps.read.outputs.low }}
+
+runs:
+  using: composite
+  steps:
+    # LookFirst is built from the source at the version you chose, so what
+    # runs is exactly the code you can read in this repository.
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache: false
+
+    - name: Build LookFirst
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: go build -trimpath -o "$RUNNER_TEMP/lookfirst" ./cmd/lookfirst
+
+    # Inputs reach the scripts as environment variables, never pasted into
+    # the script text, so a crafted value cannot run commands.
+    - name: Read the code
+      id: read
+      shell: bash
+      env:
+        LF_PATHS: ${{ inputs.path }}
+      run: |
+        read -ra paths <<< "$LF_PATHS"
+        lf="$RUNNER_TEMP/lookfirst"
+        # Each finding shows on its line in the pull request.
+        "$lf" read --format github "${paths[@]}"
+        # A summary for the run page and the comment, and the full picture to download.
+        "$lf" read --format markdown --out "$RUNNER_TEMP/lookfirst-report.html" "${paths[@]}" > "$RUNNER_TEMP/lookfirst.md"
+        cat "$RUNNER_TEMP/lookfirst.md" >> "$GITHUB_STEP_SUMMARY"
+        "$lf" read --format json "${paths[@]}" > "$RUNNER_TEMP/lookfirst.json"
+        for s in high medium low; do
+          echo "$s=$(jq -r ".counts.$s" "$RUNNER_TEMP/lookfirst.json")" >> "$GITHUB_OUTPUT"
+        done
+
+    - name: Keep the report
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: lookfirst-report
+        path: ${{ runner.temp }}/lookfirst-report.html
+
+    - name: Comment on the pull request
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        marker='<!-- lookfirst -->'
+        body="$marker"$'\n'"$(cat "$RUNNER_TEMP/lookfirst.md")"
+        # Update our own earlier comment rather than adding a new one each push.
+        id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+          --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | tail -n 1) || id=""
+        if [ -n "$id" ]; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
+        else
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
+        fi || echo "::notice title=LookFirst::Could not comment on the pull request. A pull request from a fork gets a read-only token; the summary is on the run page."
+
+    - name: Stop on findings
+      if: inputs.fail-on != 'none'
+      shell: bash
+      env:
+        LF_PATHS: ${{ inputs.path }}
+        LF_FAIL: ${{ inputs.fail-on }}
+      run: |
+        read -ra paths <<< "$LF_PATHS"
+        "$RUNNER_TEMP/lookfirst" read --format json --fail-on "$LF_FAIL" "${paths[@]}" > /dev/null

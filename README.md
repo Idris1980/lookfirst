@@ -7,7 +7,9 @@ Code from an AI assistant, a forum or a tutorial often works, and often does mor
 - **A picture** of what it would build or touch: servers, firewalls, databases, containers, the websites it talks to, files on your computer, programs it starts and packages it pulls in.
 - **The risks in plain English**, each with the line it is on and how to fix it.
 
-It works as a VS Code extension and as a single command-line program. Nothing leaves your computer, unless you ask the AI in VS Code to explain a problem and suggest a fix, and then you see exactly what is sent first.
+**Try it in your browser: [idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/)** (it runs in the page; your code is not sent anywhere).
+
+It also works as a VS Code extension, as a GitHub Action for pull requests and as a single command-line program. Nothing leaves your computer, unless you ask the AI in VS Code to explain a problem and suggest a fix, and then you see exactly what is sent first.
 
 ## What it reads
 
@@ -35,6 +37,7 @@ Point it at a whole repository and each folder with code gets its own picture, w
 - Package names that look like misspellings of well-known packages, packages installed straight from an address, and extra package servers
 - npm install scripts that download or run something
 - Privileged containers, the Docker socket mounted into a container, and similar container escapes
+- Placeholders someone forgot to fill in, such as `"YOUR_IP_ADDRESS"` or `"<your-subscription-id>"`
 - Syntax errors, using the language's own parser
 
 ## Using it
@@ -49,10 +52,39 @@ Point it at a whole repository and each folder with code gets its own picture, w
 lookfirst read main.tf
 lookfirst read --open ./infra
 lookfirst read --format json ./scripts
+lookfirst read --format markdown --fail-on high .
 lookfirst excerpt --line 42 main.tf
 ```
 
-`excerpt` prints the lines around a line with secrets masked, as JSON. The extension uses it before it asks an AI model.
+`--format` is `text` (the default), `json`, `markdown` or `github` (annotations for GitHub Actions). `--fail-on high` (or `medium`, `low`) exits with code 3 when there is a finding that severe, so a pipeline can stop. `excerpt` prints the lines around a line with secrets masked, as JSON; the extension uses it before it asks an AI model.
+
+### On GitHub
+
+Add LookFirst to a repository, and every pull request shows the problems on the changed lines, a summary on the run page, a comment that stays up to date, and the full picture to download:
+
+```yaml
+# .github/workflows/lookfirst.yml
+name: LookFirst
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write # for the summary comment
+jobs:
+  lookfirst:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Idris1980/lookfirst@v0.6.0
+        with:
+          path: .          # files or folders, separated by spaces
+          fail-on: high    # or medium, low, none
+```
+
+The action builds LookFirst from the source of the version you name, so what runs is exactly the code in this repository. It needs no secrets, and in pull requests from forks it still marks the lines; only the comment is skipped.
+
+### In the browser
+
+[idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/) has the same reader, compiled to WebAssembly. Paste code, open files or a folder, or try one of the examples. The page may only load its own files, so there is nowhere your code could be sent. Bicep files are the exception that does not work there, because they need Microsoft's compiler.
 
 ## Safe by design
 
@@ -72,13 +104,13 @@ LookFirst tells you what it found. It cannot promise that code is safe: code wri
 Download the `.vsix` for your platform from [Releases](https://github.com/Idris1980/lookfirst/releases) and install it:
 
 ```
-code --install-extension lookfirst-win32-x64-0.5.3.vsix
+code --install-extension lookfirst-win32-x64-0.6.0.vsix
 ```
 
 Every file in a release is built by GitHub Actions from this repository and signed with Sigstore. Check a file before you install it:
 
 ```
-gh attestation verify lookfirst-win32-x64-0.5.3.vsix --repo Idris1980/lookfirst
+gh attestation verify lookfirst-win32-x64-0.6.0.vsix --repo Idris1980/lookfirst
 ```
 
 Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`).

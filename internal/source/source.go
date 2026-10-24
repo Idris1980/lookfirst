@@ -221,6 +221,46 @@ func shebangCandidate(name string) bool {
 	return filepath.Ext(name) == "" && !strings.HasPrefix(name, ".")
 }
 
+// GuessName picks a file name for pasted code, which has none, from what
+// the code looks like. Detect then decides the kind from that name as usual.
+func GuessName(text string) string {
+	t := strings.TrimSpace(text)
+	has := func(re string) bool { return regexp.MustCompile(re).MatchString(t) }
+	switch {
+	case strings.Contains(t, "deploymentTemplate.json"):
+		return "azuredeploy.json"
+	case has(`(?m)^\s*"(dependencies|devDependencies|scripts)"\s*:`) && strings.HasPrefix(t, "{"):
+		return "package.json"
+	case has(`(?m)^(resource|variable|provider|module|terraform|data|output|locals)\s+("|\{)`):
+		return "main.tf"
+	case has(`(?m)^(param|resource|module|targetScope|var)\s+\w+.*'[\w.]+/[\w./]+@`) || has(`(?m)^targetScope\s*=`):
+		return "main.bicep"
+	case has(`(?m)^services:\s*$`):
+		return "docker-compose.yml"
+	case has(`(?m)^apiVersion:\s*\S`) && has(`(?m)^kind:\s*\S`):
+		return "manifest.yaml"
+	case has(`(?mi)^FROM\s+\S+`) && has(`(?mi)^(RUN|CMD|ENTRYPOINT|COPY|WORKDIR)\s`):
+		return "Dockerfile"
+	case has(`^#!.*\b(ba|z)?sh\b`):
+		return "script.sh"
+	case has(`^#!.*python`):
+		return "script.py"
+	case has(`^#!.*node`):
+		return "script.js"
+	case has(`(?mi)\b(Write-Host|Get-ChildItem|Set-ExecutionPolicy|Invoke-WebRequest|New-Item|\$env:[A-Za-z_])`):
+		return "script.ps1"
+	case has(`(?m)^\s*(def\s+\w+\(|import\s+\w+|from\s+[\w.]+\s+import\s)`) || has(`(?m)^if __name__ == `):
+		return "script.py"
+	case has(`(?m)\b(require\(['"]|module\.exports|console\.log\(|=>\s*[{(]|^\s*(const|let|var)\s+\w+\s*=|^\s*import\s+.*\s+from\s+['"])`):
+		return "script.js"
+	case has(`(?m)^[A-Za-z0-9_.-]+\s*(==|>=|~=)\s*\d`) && !strings.Contains(t, "{"):
+		return "requirements.txt"
+	case has(`(?m)^\s*(sudo|apt(-get)?|curl|wget|export|echo|chmod|cd|mkdir|az|aws|kubectl|docker)\s`):
+		return "script.sh"
+	}
+	return ""
+}
+
 func startsWithShebang(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {

@@ -17,7 +17,8 @@ import (
 const usage = `lookfirst shows what code would build or do, and what is risky about it, without running it.
 
 Usage:
-  lookfirst read [--out report.html] [--open] [--format text|json] <file or folder>...
+  lookfirst read [--out report.html] [--open] [--format text|json|markdown|github]
+                 [--fail-on high|medium|low|none] <file or folder>...
   lookfirst excerpt --line 42 [--context 15] <file>
 
 read     reads Terraform, Bicep, ARM, docker-compose, Kubernetes, Dockerfile,
@@ -55,16 +56,28 @@ func main() {
 
 func read(args []string) error {
 	fs := flag.NewFlagSet("read", flag.ExitOnError)
-	out := fs.String("out", "", "where to write the HTML report (default lookfirst-report.html; with --format json, no report unless given)")
+	out := fs.String("out", "", "where to write the HTML report (default lookfirst-report.html for text; other formats write one only when given)")
 	open := fs.Bool("open", false, "open the report in the browser")
-	format := fs.String("format", "text", "what to print: text or json")
+	format := fs.String("format", "text", "what to print: text, json, markdown or github (annotations for GitHub Actions)")
+	failOn := fs.String("fail-on", "none", "exit with code 3 if there is a finding this severe or worse: high, medium, low or none")
 	vscodeLinks := fs.Bool("vscode-links", false, "make boxes and findings in the report open the code in VS Code")
 	fs.Parse(args)
 	if fs.NArg() == 0 {
 		return fmt.Errorf("give a file or folder to read, for example: lookfirst read main.tf")
 	}
-	if *format != "text" && *format != "json" {
-		return fmt.Errorf("--format must be text or json")
+	printers := map[string]func([]render.Section) error{
+		"text":     func(s []render.Section) error { render.Text(os.Stdout, s); return nil },
+		"json":     func(s []render.Section) error { return render.JSON(os.Stdout, s) },
+		"markdown": func(s []render.Section) error { render.Markdown(os.Stdout, s); return nil },
+		"github":   func(s []render.Section) error { render.GitHub(os.Stdout, s); return nil },
+	}
+	print, ok := printers[*format]
+	if !ok {
+		return fmt.Errorf("--format must be text, json, markdown or github")
+	}
+	threshold, ok := map[string]int{"high": 0, "medium": 1, "low": 2, "none": -1}[*failOn]
+	if !ok {
+		return fmt.Errorf("--fail-on must be high, medium, low or none")
 	}
 
 	projects, err := analyze.Paths(fs.Args())
@@ -75,37 +88,45 @@ func read(args []string) error {
 	for i, p := range projects {
 		sections[i] = render.Section{Name: p.Name, Graph: p.Graph}
 	}
-	if *format == "json" {
-		if err := render.JSON(os.Stdout, sections); err != nil {
-			return err
-		}
-	} else {
-		render.Text(os.Stdout, sections)
+	if err := print(sections); err != nil {
+		return err
 	}
 
-	if *out == "" && *format == "json" {
-		return nil
-	}
-	if *out == "" {
+	if *out == "" && *format == "text" {
 		*out = "lookfirst-report.html"
 	}
-	f, err := os.Create(*out)
-	if err != nil {
-		return err
+	if *out != "" {
+		f, err := os.Create(*out)
+		if err != nil {
+			return err
+		}
+		if err := render.HTML(f, sections, render.Options{VSCode: *vscodeLinks}); err != nil {
+			f.Close()
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		abs, _ := filepath.Abs(*out)
+		if *format == "text" {
+			fmt.Printf("\nReport: %s\n", abs)
+		}
+		if *open {
+			if err := openFile(abs); err != nil {
+				return err
+			}
+		}
 	}
-	if err := render.HTML(f, sections, render.Options{VSCode: *vscodeLinks}); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	abs, _ := filepath.Abs(*out)
-	if *format == "text" {
-		fmt.Printf("\nReport: %s\n", abs)
-	}
-	if *open {
-		return openFile(abs)
+
+	// The exit code lets a pipeline stop on findings. The reports above are
+	// written first, so the reason is always there to read.
+	for _, p := range projects {
+		for _, f := range p.Graph.Findings {
+			if int(f.Severity) <= threshold {
+				fmt.Fprintf(os.Stderr, "lookfirst: stopping because of a %s finding (--fail-on %s)\n", f.Severity, *failOn)
+				os.Exit(3)
+			}
+		}
 	}
 	return nil
 }
