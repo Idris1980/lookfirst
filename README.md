@@ -72,13 +72,13 @@ LookFirst tells you what it found. It cannot promise that code is safe: code wri
 Download the `.vsix` for your platform from [Releases](https://github.com/Idris1980/lookfirst/releases) and install it:
 
 ```
-code --install-extension lookfirst-win32-x64-0.5.1.vsix
+code --install-extension lookfirst-win32-x64-0.5.3.vsix
 ```
 
 Every file in a release is built by GitHub Actions from this repository and signed with Sigstore. Check a file before you install it:
 
 ```
-gh attestation verify lookfirst-win32-x64-0.5.1.vsix --repo Idris1980/lookfirst
+gh attestation verify lookfirst-win32-x64-0.5.3.vsix --repo Idris1980/lookfirst
 ```
 
 Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`).

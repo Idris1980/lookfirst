@@ -32,7 +32,7 @@ let diagnostics;
 let status;
 let scratch;
 const pasteTimers = new Map();
-const lastCounts = new Map(); // document URI -> counts from its latest check
+const checked = new Set(); // URIs of documents LookFirst has checked
 const openable = new Map(); // path key -> URI of a file a shown report may open
 
 function activate(context) {
@@ -57,11 +57,18 @@ function activate(context) {
     vscode.workspace.onDidChangeTextDocument(onChange),
     vscode.workspace.onDidCloseTextDocument((doc) => {
       diagnostics.delete(doc.uri);
-      lastCounts.delete(doc.uri.toString());
+      checked.delete(doc.uri.toString());
+      tried.delete(doc.uri.toString());
     }),
-    vscode.window.onDidChangeActiveTextEditor(updateContext),
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      updateContext(editor);
+      checkOnOpen(editor);
+    }),
+    // The shield always counts what is in the Problems panel right now.
+    vscode.languages.onDidChangeDiagnostics(() => updateContext(vscode.window.activeTextEditor)),
   );
   updateContext(vscode.window.activeTextEditor);
+  checkOnOpen(vscode.window.activeTextEditor);
   explain.register(context, { openable, key, scratchCopy, removeScratch, runLookFirst });
 }
 
@@ -82,16 +89,27 @@ function supported(doc) {
   return doc.isUntitled && LANGUAGE_FILE[doc.languageId] !== undefined;
 }
 
-// updateContext runs when the active editor changes. Moving to the picture
-// or another panel leaves no text editor; keep the status for the file the
-// user was in, and show each file's own result when they come back to it.
+// updateContext runs when the active editor or the problems change. Moving
+// to the picture or another panel leaves no text editor; keep the status
+// for the file the user was in.
 function updateContext(editor) {
   if (!editor) return;
   const ok = supported(editor.document);
   vscode.commands.executeCommand('setContext', 'lookFirst.supported', ok);
-  const counts = ok && lastCounts.get(editor.document.uri.toString());
-  if (counts) showStatus(counts);
+  if (ok && checked.has(editor.document.uri.toString())) showStatus(editor.document);
   else status.hide();
+}
+
+// checkOnOpen checks a file the first time it is shown, quietly, so the
+// shield and the squiggles are there before anyone saves anything.
+const tried = new Set(); // URIs already checked, or tried, since they were opened
+function checkOnOpen(editor) {
+  if (!editor || !setting('checkOnOpen')) return;
+  const doc = editor.document;
+  const id = doc.uri.toString();
+  if (doc.isUntitled || !supported(doc) || tried.has(id)) return;
+  tried.add(id);
+  checkDocument(doc, { announce: false });
 }
 
 // A larger insertion in one go is a paste or an AI assistant writing code.
@@ -133,10 +151,8 @@ async function checkDocument(doc, { announce, pasted }) {
     d.source = 'LookFirst';
     items.push(d);
   }
-  diagnostics.set(doc.uri, items);
-  lastCounts.set(doc.uri.toString(), report.counts);
-  const active = vscode.window.activeTextEditor;
-  if (active && active.document === doc) showStatus(report.counts);
+  checked.add(doc.uri.toString());
+  diagnostics.set(doc.uri, items); // the shield follows through onDidChangeDiagnostics
 
   if (!announce) return;
   const serious = report.findings.filter((f) => f.severity === 'high');
@@ -155,18 +171,27 @@ async function checkDocument(doc, { announce, pasted }) {
   if (pick === 'Show problems') vscode.commands.executeCommand('workbench.actions.view.problems');
 }
 
-function showStatus(counts) {
-  if (counts.high > 0) {
-    status.text = `$(shield) ${counts.high} high`;
+// showStatus counts LookFirst's problems for the document straight from the
+// Problems panel, so the shield and the panel can never disagree, and lists
+// them in the tooltip.
+function showStatus(doc) {
+  const items = (diagnostics.get(doc.uri) || []).filter((d) => d.source === 'LookFirst');
+  const high = items.filter((d) => d.severity === vscode.DiagnosticSeverity.Error);
+  const medium = items.filter((d) => d.severity === vscode.DiagnosticSeverity.Warning);
+  if (high.length > 0) {
+    status.text = `$(shield) ${high.length} high`;
     status.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-  } else if (counts.medium > 0) {
-    status.text = `$(shield) ${counts.medium} medium`;
+  } else if (medium.length > 0) {
+    status.text = `$(shield) ${medium.length} medium`;
     status.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
   } else {
     status.text = '$(shield) no known risks';
     status.backgroundColor = undefined;
   }
-  status.tooltip = 'LookFirst: click to see what this code would build or do';
+  const level = { [vscode.DiagnosticSeverity.Error]: 'high', [vscode.DiagnosticSeverity.Warning]: 'medium' };
+  const lines = items.slice(0, 8).map((d) => `${level[d.severity] || 'low'}, line ${d.range.start.line + 1}: ${d.message.split(': ')[0]}`);
+  if (items.length > 8) lines.push(`and ${items.length - 8} more`);
+  status.tooltip = `LookFirst, ${path.basename(doc.fileName)}\n${lines.join('\n') || 'No known risks in what we checked.'}\n\nClick to see the picture.`;
   status.show();
 }
 

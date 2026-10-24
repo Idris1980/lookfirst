@@ -10,7 +10,7 @@ Copied some code from an AI assistant or a forum and not sure what it does? Look
 
 - Right-click a file or folder and choose **Show in LookFirst**.
 - Click a box in the picture, or a place in the list of findings, to jump straight to that line in the code.
-- Or just save, or paste a larger piece of code. LookFirst checks it on its own and warns you if something is serious.
+- Or just open, save or paste code. LookFirst checks it on its own and warns you if something is serious.
 
 ## Explain and fix with AI
 
@@ -44,6 +44,7 @@ LookFirst tells you what it found. It cannot promise that code is safe: code tha
 
 | Setting | Default | What it does |
 | --- | --- | --- |
+| `lookFirst.checkOnOpen` | `true` | Check supported files quietly when you open them. |
 | `lookFirst.checkOnSave` | `true` | Check supported files when you save them. |
 | `lookFirst.checkOnPaste` | `true` | Check right after a larger piece of code is pasted or inserted. |
 | `lookFirst.pasteMinLines` | `5` | How many lines an insertion needs before it is checked. |
