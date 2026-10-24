@@ -44,7 +44,7 @@ resource "azurerm_network_security_group" "main" {
     protocol                   = "Tcp"
     source_port_range          = "*"
     destination_port_range     = "22"
-    source_address_prefix      = "*"
+    source_address_prefix      = "YOUR_IP_ADDRESS"  # Replace with your actual IP address
     destination_address_prefix = "*"
   }
 
@@ -86,7 +86,7 @@ resource "azurerm_linux_virtual_machine" "main" {
   size                            = "Standard_B1s"
   admin_username                  = "azureuser"
   admin_password                  = "P@ssw0rd1234!"
-  disable_password_authentication = false
+  disable_password_authentication = true
   network_interface_ids           = [azurerm_network_interface.main.id]
 
   os_disk {

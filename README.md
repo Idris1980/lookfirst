@@ -7,7 +7,7 @@ Code from an AI assistant, a forum or a tutorial often works, and often does mor
 - **A picture** of what it would build or touch: servers, firewalls, databases, containers, the websites it talks to, files on your computer, programs it starts and packages it pulls in.
 - **The risks in plain English**, each with the line it is on and how to fix it.
 
-It works as a VS Code extension and as a single command-line program, and nothing leaves your computer.
+It works as a VS Code extension and as a single command-line program. Nothing leaves your computer, unless you ask the AI in VS Code to explain a problem and suggest a fix, and then you see exactly what is sent first.
 
 ## What it reads
 
@@ -41,20 +41,26 @@ Point it at a whole repository and each folder with code gets its own picture, w
 
 **In VS Code:** right-click a file or folder and choose **Show in LookFirst**. Click a box in the picture, or a finding in the list, to jump to that line. Files are also checked when you save them, and right after a larger piece of code is pasted.
 
+**Explain and fix with AI:** next to each finding, and on the light bulb of each squiggle, LookFirst can ask the AI model you already use in VS Code (such as GitHub Copilot) to explain the problem in plain language and suggest a fix. It is off until you turn it on. Only about 30 lines around the problem are sent, with passwords and keys replaced by placeholders such as `«SECRET_1»`; you see the exact text and choose Send or Cancel every time. A suggested fix is shown as a comparison with your code and changes the file only when you choose Apply.
+
 **On the command line:**
 
 ```
 lookfirst read main.tf
 lookfirst read --open ./infra
 lookfirst read --format json ./scripts
+lookfirst excerpt --line 42 main.tf
 ```
+
+`excerpt` prints the lines around a line with secrets masked, as JSON. The extension uses it before it asks an AI model.
 
 ## Safe by design
 
 - **The code is never run.** It is read as text. Syntax checks ask the language's own parser to read the file (`node --check`, `bash -n`, Python's `ast.parse`, the PowerShell parser), which never runs it. Bicep is compiled locally with `--no-restore`, so no modules are downloaded.
-- **Nothing is sent anywhere.** LookFirst makes no network requests.
-- **The report runs no scripts.** It is a plain HTML page with a Content-Security-Policy that forbids scripts and network access. In VS Code it is shown with scripts switched off; its links can only open files that are part of the report.
-- **A workspace cannot change which program the extension runs.** That setting can only be set in your own user settings.
+- **Nothing is sent anywhere** by the program. The only exception is the opt-in AI explanation in VS Code, described above.
+- **Secrets are masked before anything is shown to an AI model.** Known key formats, values of settings named like passwords, multi-line private keys and long random strings are replaced, and the tests check that no secret in the examples survives masking.
+- **The report runs no scripts.** It is a plain HTML page with a Content-Security-Policy that forbids scripts and network access. In VS Code it is shown with scripts switched off; its links can only open files that are part of the report, or ask the AI (which asks you first). The AI's answer is shown as plain text, never as code that runs.
+- **A workspace cannot change how the extension behaves.** The program it runs and the AI settings can only be set in your own user settings, so a downloaded repository cannot turn on the AI or stop it from asking.
 - **Inputs are limited** in size and number, and symbolic links are not followed.
 
 ## Limits
@@ -66,13 +72,13 @@ LookFirst tells you what it found. It cannot promise that code is safe: code wri
 Download the `.vsix` for your platform from [Releases](https://github.com/Idris1980/lookfirst/releases) and install it:
 
 ```
-code --install-extension lookfirst-win32-x64-0.4.0.vsix
+code --install-extension lookfirst-win32-x64-0.5.1.vsix
 ```
 
 Every file in a release is built by GitHub Actions from this repository and signed with Sigstore. Check a file before you install it:
 
 ```
-gh attestation verify lookfirst-win32-x64-0.4.0.vsix --repo Idris1980/lookfirst
+gh attestation verify lookfirst-win32-x64-0.5.1.vsix --repo Idris1980/lookfirst
 ```
 
 Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`).

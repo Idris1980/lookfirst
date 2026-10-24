@@ -2,3 +2,4 @@
 .vscode/**
 bin/SHA256SUMS.txt
 media/icon.svg
+test/**

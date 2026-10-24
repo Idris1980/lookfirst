@@ -1,12 +1,16 @@
 package analyze
 
 import (
+	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Idris1980/lookfirst/internal/model"
+	"github.com/Idris1980/lookfirst/internal/risk"
+	"github.com/Idris1980/lookfirst/internal/source"
 )
 
 // Each example must keep finding what it was written to show. A change
@@ -146,6 +150,47 @@ func TestProjectsPerFolder(t *testing.T) {
 	for _, p := range projects {
 		if strings.Contains(p.Name, `\`) {
 			t.Errorf("project name %q should use forward slashes", p.Name)
+		}
+	}
+}
+
+// TestMaskHidesEverySecret masks every example file, as the extension does
+// before code is shown to an AI model, and reads the masked files again.
+// None of the secrets LookFirst finds may still be there.
+func TestMaskHidesEverySecret(t *testing.T) {
+	secretTitles := map[string]bool{
+		"Secret written in the code":               true,
+		"Password or key written in the code":      true,
+		"Password has a default value in the code": true,
+	}
+	files, _, err := source.Collect([]string{filepath.Join("..", "..", "examples")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	var masked []string
+	for i, f := range files {
+		if f.Kind == source.Bicep {
+			continue // needs a compiler; its secrets are covered by the ARM rules
+		}
+		out, _ := risk.Mask(string(f.Data))
+		sub := filepath.Join(dir, fmt.Sprint(i))
+		if err := os.MkdirAll(sub, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		p := filepath.Join(sub, filepath.Base(f.Path))
+		if err := os.WriteFile(p, []byte(out), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		masked = append(masked, p)
+	}
+	projects, err := Paths(masked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range Merge(projects).Findings {
+		if secretTitles[f.Title] {
+			t.Errorf("a secret survived masking in %s:%d: %s", filepath.Base(f.File), f.Line, f.Detail)
 		}
 	}
 }

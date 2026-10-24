@@ -1,15 +1,15 @@
 {
   "name": "lookfirst",
   "displayName": "LookFirst: See What Code Does Before You Run It",
-  "description": "Shows what code would build or do before you run it: a picture of servers, ports, files and websites it touches, and the risks in plain English. Reads the code without running it, and nothing leaves your computer.",
-  "version": "0.4.0",
+  "description": "Shows what code would build or do before you run it: a picture of servers, ports, files and websites it touches, and the risks in plain English. Reads the code without running it. Nothing leaves your computer unless you ask the AI to explain a problem, and then you see exactly what is sent.",
+  "version": "0.5.1",
   "publisher": "idris1980",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": { "type": "git", "url": "https://github.com/Idris1980/lookfirst" },
   "homepage": "https://github.com/Idris1980/lookfirst#readme",
   "bugs": { "url": "https://github.com/Idris1980/lookfirst/issues" },
-  "engines": { "vscode": "^1.82.0" },
+  "engines": { "vscode": "^1.90.0" },
   "categories": ["Linters", "Other"],
   "keywords": ["security", "terraform", "docker", "kubernetes", "ai code", "secrets", "bicep"],
   "main": "./extension.js",
@@ -33,6 +33,11 @@
         "command": "lookFirst.check",
         "title": "Check This File",
         "category": "LookFirst"
+      },
+      {
+        "command": "lookFirst.explain",
+        "title": "Explain and Fix the Problem on This Line with AI",
+        "category": "LookFirst"
       }
     ],
     "menus": {
@@ -44,6 +49,9 @@
       ],
       "explorer/context": [
         { "command": "lookFirst.show", "group": "navigation" }
+      ],
+      "commandPalette": [
+        { "command": "lookFirst.explain", "when": "lookFirst.supported" }
       ]
     },
     "configuration": {
@@ -70,6 +78,24 @@
           "default": "",
           "scope": "machine",
           "description": "Full path to a lookfirst program to use instead of the one that comes with the extension. Can only be set in your own user settings, never by a workspace."
+        },
+        "lookFirst.ai.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "Let LookFirst ask the AI model in VS Code (for example GitHub Copilot) to explain a problem and suggest a fix. About 30 lines of code around the problem are sent, with passwords and keys replaced by placeholders. Can only be set in your own user settings, never by a workspace."
+        },
+        "lookFirst.ai.showBeforeSending": {
+          "type": "boolean",
+          "default": true,
+          "scope": "machine",
+          "description": "Show exactly what will be sent to the AI model, and ask, every time. Can only be set in your own user settings, never by a workspace."
+        },
+        "lookFirst.ai.model": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Which AI model to ask, by part of its name, for example `gpt-4.1` or `claude`. Empty means the largest model available, avoiding small ones such as \"mini\". Can only be set in your own user settings, never by a workspace."
         }
       }
     }

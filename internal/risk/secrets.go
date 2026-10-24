@@ -27,7 +27,7 @@ var (
 		{regexp.MustCompile(`(?i)(postgres(ql)?|mysql|mongodb(\+srv)?|redis|amqp)://[^:/\s]+:[^@/\s]+@`), "a connection string with a password"},
 	}
 	// placeholders are values that are obviously not real secrets.
-	placeholder = regexp.MustCompile(`(?i)^(\$\{.*\}|\$[A-Z_][A-Z0-9_]*|<.*>|x+|\*+|changeme_later|your[_-].*|todo|none|null|true|false|\{\{.*\}\})$`)
+	placeholder = regexp.MustCompile(`(?i)^(\$\{.*\}|\$[A-Z_][A-Z0-9_]*|<.*>|x+|\*+|changeme_later|your[_-].*|todo|none|null|true|false|\{\{.*\}\}|«SECRET_\d+»)$`)
 )
 
 // SecretName reports whether a setting or variable name usually holds a

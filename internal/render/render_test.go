@@ -44,11 +44,17 @@ func TestLinksOnlyForVSCode(t *testing.T) {
 	if strings.Contains(plain.String(), "command:") {
 		t.Error("a browser report contains command links")
 	}
-	if !strings.Contains(vscode.String(), `href="command:lookFirst.reveal?`) {
+	out := vscode.String()
+	if !strings.Contains(out, `href="command:lookFirst.reveal?`) {
 		t.Error("the VS Code report has no links to the code")
 	}
-	if strings.Contains(vscode.String(), "command:") && strings.Count(vscode.String(), "command:") != strings.Count(vscode.String(), "command:lookFirst.reveal?") {
-		t.Error("the report links to a command other than lookFirst.reveal")
+	if !strings.Contains(out, `href="command:lookFirst.explain?`) {
+		t.Error("the VS Code report has no links to the AI explanation")
+	}
+	// The extension allows exactly these two commands in the picture.
+	allowed := strings.Count(out, "command:lookFirst.reveal?") + strings.Count(out, "command:lookFirst.explain?")
+	if strings.Count(out, "command:") != allowed {
+		t.Error("the report links to a command other than lookFirst.reveal and lookFirst.explain")
 	}
 }
 

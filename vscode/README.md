@@ -12,6 +12,22 @@ Copied some code from an AI assistant or a forum and not sure what it does? Look
 - Click a box in the picture, or a place in the list of findings, to jump straight to that line in the code.
 - Or just save, or paste a larger piece of code. LookFirst checks it on its own and warns you if something is serious.
 
+## Explain and fix with AI
+
+Not sure what a problem means, or how to fix it? Click **Explain and fix with AI** next to a finding in the picture, or use the light bulb on a squiggle. LookFirst asks the AI model you already use in VS Code, such as GitHub Copilot, and shows:
+
+- an explanation in plain language, in the language VS Code is set to
+- a suggested fix, which you can compare with your code (**Show the change**) and then apply (**Apply**), or ignore
+
+What is sent, and when:
+
+- **Nothing, until you turn it on.** The first time, LookFirst asks.
+- **About 30 lines around the problem**, not the whole file, with passwords and keys replaced by placeholders such as `«SECRET_1»`. The real values stay on your computer and are put back into the fix only there.
+- **You see the exact text before it is sent**, every time, and choose **Send** or **Cancel**.
+- Your file only changes when you choose **Apply**, after you have seen the change, and **Ctrl+Z** undoes it.
+
+AI answers can be wrong. Read the change before you apply it.
+
 ## What it reads
 
 Terraform, Bicep and ARM templates, docker-compose, Kubernetes manifests, Dockerfiles, Python, JavaScript and TypeScript, shell scripts, PowerShell, package.json and requirements.txt. A folder with several projects gets one picture per project, the riskiest first.
@@ -19,8 +35,8 @@ Terraform, Bicep and ARM templates, docker-compose, Kubernetes manifests, Docker
 ## Safe by design
 
 - **Your code is never run.** It is only read as text. To catch syntax errors, the language's own parser is asked to read the file (for example `node --check`), and that never runs it either.
-- **Nothing leaves your computer.** The extension makes no network requests. The picture is a plain HTML page with no scripts, shown with scripts switched off.
-- **A workspace cannot change which program runs.** The `lookFirst.path` setting can only be set in your own user settings.
+- **Nothing leaves your computer** unless you ask the AI to explain a problem, as described above. The picture is a plain HTML page with no scripts, shown with scripts switched off.
+- **A workspace cannot change how the extension behaves.** The program it runs and the AI settings can only be set in your own user settings, so a downloaded repository cannot turn on the AI or stop it from asking.
 
 LookFirst tells you what it found. It cannot promise that code is safe: code that is written to hide what it does can get past any reader.
 
@@ -32,3 +48,6 @@ LookFirst tells you what it found. It cannot promise that code is safe: code tha
 | `lookFirst.checkOnPaste` | `true` | Check right after a larger piece of code is pasted or inserted. |
 | `lookFirst.pasteMinLines` | `5` | How many lines an insertion needs before it is checked. |
 | `lookFirst.path` | (bundled) | Use another lookfirst program. User settings only. |
+| `lookFirst.ai.enabled` | `false` | Allow asking the AI model in VS Code. User settings only. |
+| `lookFirst.ai.showBeforeSending` | `true` | Show what will be sent, and ask, every time. User settings only. |
+| `lookFirst.ai.model` | (largest) | Which AI model to ask, by part of its name, such as `gpt-4.1` or `claude`. User settings only. |

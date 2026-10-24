@@ -28,4 +28,7 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
       - name: Check the extension's JavaScript
-        run: node --check vscode/extension.js
+        run: |
+          node --check vscode/extension.js
+          node --check vscode/explain.js
+          node --test "vscode/test/*.test.js"

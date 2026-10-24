@@ -64,6 +64,7 @@ type svgCol struct {
 type finding struct {
 	Sev, Title, Detail, Where, Node string
 	Href                            template.URL
+	Explain                         template.URL // asks the AI model, in VS Code only
 }
 
 // Options change how the report is made.
@@ -76,16 +77,26 @@ type Options struct {
 
 // reveal returns a link that opens file at line in VS Code.
 func reveal(opt Options, file string, line int) template.URL {
+	return command(opt, "lookFirst.reveal", file, line)
+}
+
+// explainLink returns a link that asks the AI model in VS Code to explain a
+// finding and suggest a fix. The extension shows what would be sent first.
+func explainLink(opt Options, f model.Finding) template.URL {
+	return command(opt, "lookFirst.explain", f.File, f.Line, f.Title, f.Detail)
+}
+
+func command(opt Options, name, file string, rest ...any) template.URL {
 	if !opt.VSCode || file == "" {
 		return ""
 	}
 	if abs, err := filepath.Abs(file); err == nil {
 		file = abs
 	}
-	args, _ := json.Marshal([]any{file, line})
-	// The command name and arguments are ours, and the arguments are
+	args, _ := json.Marshal(append([]any{file}, rest...))
+	// The command names and arguments are ours, and the arguments are
 	// percent-encoded, so nothing from the input can change the link.
-	return template.URL("command:lookFirst.reveal?" + url.PathEscape(string(args)))
+	return template.URL("command:" + name + "?" + url.PathEscape(string(args)))
 }
 
 // Section is one project in a report: a name and what was found there.
@@ -210,7 +221,7 @@ func buildProject(s Section, opt Options) project {
 		if n := g.Node(f.NodeID); n != nil && n.Name != filepath.Base(f.File) {
 			box = n.Name
 		}
-		p.Findings = append(p.Findings, finding{f.Severity.String(), f.Title, f.Detail, where, box, reveal(opt, f.File, f.Line)})
+		p.Findings = append(p.Findings, finding{f.Severity.String(), f.Title, f.Detail, where, box, reveal(opt, f.File, f.Line), explainLink(opt, f)})
 		p.Counts[f.Severity.String()]++
 	}
 	return p

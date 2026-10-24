@@ -18,9 +18,16 @@ const usage = `lookfirst shows what code would build or do, and what is risky ab
 
 Usage:
   lookfirst read [--out report.html] [--open] [--format text|json] <file or folder>...
+  lookfirst excerpt --line 42 [--context 15] <file>
 
-Reads Terraform, Bicep, ARM, docker-compose, Kubernetes, Dockerfile, Python,
-JavaScript/TypeScript, shell and PowerShell. Nothing is sent anywhere.
+read     reads Terraform, Bicep, ARM, docker-compose, Kubernetes, Dockerfile,
+         Python, JavaScript/TypeScript, shell, PowerShell, package.json and
+         requirements.txt.
+excerpt  prints the lines around a line as JSON, with passwords and keys
+         replaced by «SECRET_1» and so on. The VS Code extension uses it
+         before it shows code to an AI model.
+
+Nothing is sent anywhere.
 `
 
 func main() {
@@ -32,6 +39,8 @@ func main() {
 	switch os.Args[1] {
 	case "read":
 		err = read(os.Args[2:])
+	case "excerpt":
+		err = excerpt(os.Args[2:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 	default:

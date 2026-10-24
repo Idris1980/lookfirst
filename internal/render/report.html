@@ -73,6 +73,7 @@ a.nodelink { cursor: pointer; }
 a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width: 2.5; }
 .where a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .where a:hover { color: var(--text); }
+.where a.ai { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 600; color: var(--c-security); }
 .badge.high { fill: var(--high); } .badge.medium { fill: var(--medium); } .badge.low { fill: var(--low); }
 .badgetext { fill: #fff; font-size: 11px; font-weight: 700; text-anchor: middle; }
 .internet { color: var(--c-internet); } .network { color: var(--c-network); } .security { color: var(--c-security); }
@@ -178,7 +179,7 @@ a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width
       <li class="{{.Sev}}">
         <div><span class="sev {{.Sev}}">{{.Sev}}</span><span class="ftitle">{{.Title}}</span></div>
         <p class="fdetail">{{.Detail}}</p>
-        <div class="where">{{if .Href}}<a href="{{.Href}}" title="Open in the code">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if .Node}} · {{.Node}}{{end}}</div>
+        <div class="where">{{if .Href}}<a href="{{.Href}}" title="Open in the code">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if .Node}} · {{.Node}}{{end}}{{if .Explain}} · <a class="ai" href="{{.Explain}}" title="Shows you what would be sent before anything is sent">Explain and fix with AI</a>{{end}}</div>
       </li>
       {{end}}
     </ul>

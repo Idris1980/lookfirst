@@ -1,11 +1,13 @@
 // LookFirst shows what code would build or do, by running the bundled
 // lookfirst program on it. The program only reads files; this extension never
-// runs the user's code, and nothing is sent anywhere.
+// runs the user's code. Nothing is sent anywhere, except by the opt-in AI
+// feature in explain.js, which shows the user what it sends first.
 const vscode = require('vscode');
 const cp = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const explain = require('./explain');
 
 const SUPPORTED_EXT = new Set([
   '.tf', '.bicep', '.json', '.yml', '.yaml', '.py', '.js', '.mjs', '.cjs', '.ts', '.mts', '.cts',
@@ -60,6 +62,7 @@ function activate(context) {
     vscode.window.onDidChangeActiveTextEditor(updateContext),
   );
   updateContext(vscode.window.activeTextEditor);
+  explain.register(context, { openable, key, scratchCopy, removeScratch, runLookFirst });
 }
 
 function deactivate() {
@@ -216,8 +219,9 @@ async function show(context, uri) {
   const panel = vscode.window.createWebviewPanel('lookFirst', `LookFirst: ${title}`, vscode.ViewColumn.Beside, {
     enableScripts: false,
     enableForms: false,
-    // Links in the picture may run this one command and nothing else.
-    enableCommandUris: ['lookFirst.reveal'],
+    // Links in the picture may open the code or ask the AI (which asks the
+    // user before sending anything), and nothing else.
+    enableCommandUris: ['lookFirst.reveal', 'lookFirst.explain'],
     localResourceRoots: [],
   });
   panel.webview.html = html;
