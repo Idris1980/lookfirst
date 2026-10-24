@@ -66,8 +66,11 @@ runs:
         else
           "$lf" read --format github "${paths[@]}"
         fi
-        # A summary for the run page and the comment, and the full picture to download.
-        "$lf" read --format markdown --out "$RUNNER_TEMP/lookfirst-report.html" "${paths[@]}" > "$RUNNER_TEMP/lookfirst.md"
+        # A summary for the run page and the comment, and the full picture to
+        # download. In a pull request the summary starts with what it changes.
+        focus=()
+        if [ -s "$RUNNER_TEMP/changed.txt" ]; then focus=(--changed "$RUNNER_TEMP/changed.txt"); fi
+        "$lf" read --format markdown "${focus[@]}" --out "$RUNNER_TEMP/lookfirst-report.html" "${paths[@]}" > "$RUNNER_TEMP/lookfirst.md"
         cat "$RUNNER_TEMP/lookfirst.md" >> "$GITHUB_STEP_SUMMARY"
         "$lf" read --format json "${paths[@]}" > "$RUNNER_TEMP/lookfirst.json"
         for s in high medium low; do
@@ -106,4 +109,7 @@ runs:
         LF_FAIL: ${{ inputs.fail-on }}
       run: |
         read -ra paths <<< "$LF_PATHS"
-        "$RUNNER_TEMP/lookfirst" read --format json --fail-on "$LF_FAIL" "${paths[@]}" > /dev/null
+        # In a pull request, only findings in the files it changes can stop it.
+        focus=()
+        if [ -s "$RUNNER_TEMP/changed.txt" ]; then focus=(--changed "$RUNNER_TEMP/changed.txt"); fi
+        "$RUNNER_TEMP/lookfirst" read --format json --fail-on "$LF_FAIL" "${focus[@]}" "${paths[@]}" > /dev/null

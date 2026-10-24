@@ -101,7 +101,7 @@ func TestMarkdownEscapesCode(t *testing.T) {
 	g := &model.Graph{}
 	g.Add(model.Medium, "", "Package name looks like a misspelling", `"![x](https://evil.example/p.png)" <img src=x>`, "package.json", 3)
 	var buf bytes.Buffer
-	Markdown(&buf, []Section{{Name: "x", Graph: g}})
+	Markdown(&buf, []Section{{Name: "x", Graph: g}}, nil)
 	out := buf.String()
 	// Escaped, the text is shown as written: \! \[ \( and \< are not syntax.
 	if strings.Contains(out, "![x](") || strings.Contains(strings.ReplaceAll(out, `\<`, ""), "<img") {
@@ -109,5 +109,22 @@ func TestMarkdownEscapesCode(t *testing.T) {
 	}
 	if !strings.Contains(out, "0 high · 1 medium · 0 low") {
 		t.Errorf("counts missing:\n%s", out)
+	}
+}
+
+func TestMarkdownPutsTheChangeFirst(t *testing.T) {
+	old := &model.Graph{}
+	old.Add(model.High, "", "Old problem", "x", "examples/old.tf", 1)
+	mine := &model.Graph{}
+	mine.Add(model.High, "", "New problem", "y", "test-pr/main.tf", 14)
+	var buf bytes.Buffer
+	Markdown(&buf, []Section{{Name: "examples", Graph: old}, {Name: "test-pr", Graph: mine}}, map[string]bool{"test-pr/main.tf": true})
+	out := buf.String()
+	first, rest, _ := strings.Cut(out, "<details>")
+	if !strings.Contains(first, "New problem") || strings.Contains(first, "Old problem") {
+		t.Errorf("the pull request's own finding should come first, alone:\n%s", out)
+	}
+	if !strings.Contains(rest, "2 high") {
+		t.Errorf("the folded part should count everything:\n%s", out)
 	}
 }
