@@ -56,7 +56,7 @@ lookfirst read --format markdown --fail-on high .
 lookfirst excerpt --line 42 main.tf
 ```
 
-`--format` is `text` (the default), `json`, `markdown` or `github` (annotations for GitHub Actions). `--fail-on high` (or `medium`, `low`) exits with code 3 when there is a finding that severe, so a pipeline can stop. `excerpt` prints the lines around a line with secrets masked, as JSON; the extension uses it before it asks an AI model.
+`--format` is `text` (the default), `json`, `markdown` or `github` (annotations for GitHub Actions). `--fail-on high` (or `medium`, `low`) exits with code 3 when there is a finding that severe, so a pipeline can stop. `--changed paths.txt` (one path per line) is for pull requests: the Markdown summary shows the findings in those files first, and `--fail-on` only counts them. `excerpt` prints the lines around a line with secrets masked, as JSON; the extension uses it before it asks an AI model.
 
 ### On GitHub
 
@@ -80,7 +80,7 @@ jobs:
           fail-on: high    # or medium, low, none
 ```
 
-In a pull request, only the files it changes get markings on their lines, so old problems elsewhere do not crowd out the new ones; the summary and the report still cover everything that was read. The action builds LookFirst from the source of the version you name, so what runs is exactly the code in this repository. It needs no secrets, and in pull requests from forks it still marks the lines; only the comment is skipped.
+In a pull request, LookFirst looks at the change: only the files it changes get markings on their lines, the comment starts with their findings, and `fail-on` only counts them, so old problems elsewhere neither crowd out nor block the change. Everything else that was read is folded away in the comment and is in the full report. The action builds LookFirst from the source of the version you name, so what runs is exactly the code in this repository. It needs no secrets, and in pull requests from forks it still marks the lines; only the comment is skipped.
 
 ### In the browser
 

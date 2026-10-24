@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/Idris1980/lookfirst/internal/analyze"
 	"github.com/Idris1980/lookfirst/internal/render"
@@ -18,7 +19,7 @@ const usage = `lookfirst shows what code would build or do, and what is risky ab
 
 Usage:
   lookfirst read [--out report.html] [--open] [--format text|json|markdown|github]
-                 [--fail-on high|medium|low|none] <file or folder>...
+                 [--fail-on high|medium|low|none] [--changed paths.txt] <file or folder>...
   lookfirst excerpt --line 42 [--context 15] <file>
 
 read     reads Terraform, Bicep, ARM, docker-compose, Kubernetes, Dockerfile,
@@ -61,14 +62,28 @@ func read(args []string) error {
 	format := fs.String("format", "text", "what to print: text, json, markdown or github (annotations for GitHub Actions)")
 	failOn := fs.String("fail-on", "none", "exit with code 3 if there is a finding this severe or worse: high, medium, low or none")
 	vscodeLinks := fs.Bool("vscode-links", false, "make boxes and findings in the report open the code in VS Code")
+	changedList := fs.String("changed", "", "a file listing the paths a pull request changes, one per line: markdown shows their findings first, and --fail-on only counts them")
 	fs.Parse(args)
 	if fs.NArg() == 0 {
 		return fmt.Errorf("give a file or folder to read, for example: lookfirst read main.tf")
 	}
+	var changed map[string]bool
+	if *changedList != "" {
+		data, err := os.ReadFile(*changedList)
+		if err != nil {
+			return err
+		}
+		changed = map[string]bool{}
+		for _, l := range strings.Split(string(data), "\n") {
+			if l = strings.TrimSpace(l); l != "" {
+				changed[filepath.ToSlash(l)] = true
+			}
+		}
+	}
 	printers := map[string]func([]render.Section) error{
 		"text":     func(s []render.Section) error { render.Text(os.Stdout, s); return nil },
 		"json":     func(s []render.Section) error { return render.JSON(os.Stdout, s) },
-		"markdown": func(s []render.Section) error { render.Markdown(os.Stdout, s); return nil },
+		"markdown": func(s []render.Section) error { render.Markdown(os.Stdout, s, changed); return nil },
 		"github":   func(s []render.Section) error { render.GitHub(os.Stdout, s); return nil },
 	}
 	print, ok := printers[*format]
@@ -122,6 +137,10 @@ func read(args []string) error {
 	// written first, so the reason is always there to read.
 	for _, p := range projects {
 		for _, f := range p.Graph.Findings {
+			// In a pull request, only what the change brings in can stop it.
+			if changed != nil && !changed[filepath.ToSlash(f.File)] {
+				continue
+			}
 			if int(f.Severity) <= threshold {
 				fmt.Fprintf(os.Stderr, "lookfirst: stopping because of a %s finding (--fail-on %s)\n", f.Severity, *failOn)
 				os.Exit(3)
