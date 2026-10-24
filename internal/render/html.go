@@ -1,0 +1,381 @@
+// Package render shows a graph to a person: as a self-contained HTML report,
+// as text in the terminal, or as JSON for the VS Code extension.
+package render
+
+import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
+	"html/template"
+	"io"
+	"net/url"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/Idris1980/lookfirst/internal/explain"
+	"github.com/Idris1980/lookfirst/internal/model"
+)
+
+// The report contains no JavaScript and loads nothing from the network. Its
+// Content-Security-Policy makes the browser enforce that, so a malicious
+// resource name in the input cannot turn into a script either.
+//
+//go:embed report.html
+var reportHTML string
+
+var report = template.Must(template.New("report").Parse(reportHTML))
+
+const (
+	nodeW, nodeH = 216, 72
+	colGap       = 84
+	rowGap       = 34
+	padX, padY   = 24, 92
+	maxRows      = 12 // more than this in one column is folded into "+N more"
+)
+
+// quietLabel are line labels too common to be worth drawing.
+var quietLabel = map[string]bool{"uses": true, "connects": true, "installs": true}
+
+type svgNode struct {
+	X, Y, W, H     int
+	Name, Friendly string
+	Tooltip        string
+	Icon           template.HTML
+	Code           string
+	Cat, Sev       string
+	Count          int
+	Href           template.URL // where a click goes, or "" outside VS Code
+}
+
+type svgEdge struct {
+	D      string
+	Risky  bool
+	Label  string
+	Lines  []string // the label, one item per line so it fits between columns
+	LX, LY int
+}
+
+type svgCol struct {
+	X     int
+	Title string
+}
+
+type finding struct {
+	Sev, Title, Detail, Where, Node string
+	Href                            template.URL
+}
+
+// Options change how the report is made.
+type Options struct {
+	// VSCode makes boxes and findings links that open the code in VS Code.
+	// The links are command: URIs that only VS Code acts on, so the page
+	// still needs no JavaScript.
+	VSCode bool
+}
+
+// reveal returns a link that opens file at line in VS Code.
+func reveal(opt Options, file string, line int) template.URL {
+	if !opt.VSCode || file == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(file); err == nil {
+		file = abs
+	}
+	args, _ := json.Marshal([]any{file, line})
+	// The command name and arguments are ours, and the arguments are
+	// percent-encoded, so nothing from the input can change the link.
+	return template.URL("command:lookFirst.reveal?" + url.PathEscape(string(args)))
+}
+
+type page struct {
+	Sources    []string
+	Summary    []string
+	Disclaimer string
+	W, H       int
+	Cols       []svgCol
+	Nodes      []svgNode
+	Edges      []svgEdge
+	Findings   []finding
+	Counts     map[string]int
+}
+
+func HTML(w io.Writer, g *model.Graph, opt Options) error {
+	p := page{
+		Sources:    g.Sources,
+		Summary:    explain.Summary(g),
+		Disclaimer: explain.Disclaimer,
+		Counts:     map[string]int{},
+	}
+	l := layout(g)
+	p.Cols, p.W, p.H = l.cols, l.w, l.h
+
+	for _, n := range l.order {
+		pos := l.pos[n.ID]
+		sn := svgNode{
+			X: pos.x, Y: pos.y, W: nodeW, H: nodeH,
+			Name: clip(n.Name, 23), Friendly: clip(n.Friendly, 27), Code: clipCode(n.Code, 25),
+			Tooltip: n.Name + "\n" + n.Friendly, Icon: icon(n.Kind), Cat: strings.ToLower(n.Category.String()),
+		}
+		if n.File != "" {
+			sn.Tooltip += fmt.Sprintf("\n%s:%d", n.File, n.Line)
+		}
+		if sev, ok := g.Worst(n.ID); ok {
+			sn.Sev = sev.String()
+			for _, f := range g.Findings {
+				if f.NodeID == n.ID {
+					sn.Count++
+				}
+			}
+		}
+		if n.Code != "" {
+			sn.Tooltip += "\n" + n.Code
+		}
+		// A click goes to the worst problem in the box, so the user lands
+		// where there is something to fix; without problems, to where the
+		// box is defined. Findings are sorted, so the first one is worst.
+		file, line := n.File, n.Line
+		for _, f := range g.Findings {
+			if f.NodeID == n.ID && f.File != "" {
+				file, line = f.File, f.Line
+				break
+			}
+		}
+		if sn.Href = reveal(opt, file, line); sn.Href != "" {
+			sn.Tooltip += "\nClick to open in the code"
+		}
+		p.Nodes = append(p.Nodes, sn)
+	}
+
+	lanes := map[int]int{}
+	for _, e := range l.edges {
+		a, b := l.pos[e.From], l.pos[e.To]
+		se := edgePath(a, b, e, lanes)
+		if se.Label != "" {
+			se.Lines = strings.Split(se.Label, ", ")
+			se.LY -= 12 * (len(se.Lines) - 1)
+		}
+		p.Edges = append(p.Edges, se)
+	}
+
+	for _, f := range g.Findings {
+		where := f.File
+		if f.Line > 0 {
+			where = fmt.Sprintf("%s:%d", f.File, f.Line)
+		}
+		// Name the box the finding belongs to, unless it is just the file itself.
+		box := ""
+		if n := g.Node(f.NodeID); n != nil && n.Name != filepath.Base(f.File) {
+			box = n.Name
+		}
+		p.Findings = append(p.Findings, finding{f.Severity.String(), f.Title, f.Detail, where, box, reveal(opt, f.File, f.Line)})
+		p.Counts[f.Severity.String()]++
+	}
+	return report.Execute(w, p)
+}
+
+type place struct{ x, y, col, row int }
+
+type laidOut struct {
+	order []*model.Node
+	pos   map[string]place
+	edges []model.Edge
+	cols  []svgCol
+	w, h  int
+}
+
+// layout puts each category in a column, folds long columns, and orders
+// each column so lines cross as little as possible.
+func layout(g *model.Graph) laidOut {
+	columns := map[model.Category][]*model.Node{}
+	for _, n := range g.Nodes {
+		columns[n.Category] = append(columns[n.Category], n)
+	}
+
+	// Fold long columns, keeping the boxes with findings.
+	redirect := map[string]string{}
+	for c, nodes := range columns {
+		if len(nodes) <= maxRows {
+			continue
+		}
+		sort.SliceStable(nodes, func(i, j int) bool {
+			_, fi := g.Worst(nodes[i].ID)
+			_, fj := g.Worst(nodes[j].ID)
+			return fi && !fj
+		})
+		keep, rest := nodes[:maxRows-1], nodes[maxRows-1:]
+		more := &model.Node{
+			ID: "more." + c.String(), Name: fmt.Sprintf("+%d more", len(rest)), Kind: "generic",
+			Friendly: "listed in the findings", Category: c,
+		}
+		for _, n := range rest {
+			redirect[n.ID] = more.ID
+		}
+		columns[c] = append(append([]*model.Node{}, keep...), more)
+	}
+	target := func(id string) string {
+		if r, ok := redirect[id]; ok {
+			return r
+		}
+		return id
+	}
+	var edges []model.Edge
+	seen := map[[2]string]int{}
+	for _, e := range g.Edges {
+		e.From, e.To = target(e.From), target(e.To)
+		if e.From == e.To {
+			continue
+		}
+		key := [2]string{e.From, e.To}
+		if i, ok := seen[key]; ok {
+			edges[i].Risky = edges[i].Risky || e.Risky
+			continue
+		}
+		if _, ok := redirect[e.To]; ok || strings.HasPrefix(e.To, "more.") || quietLabel[e.Label] {
+			e.Label = "" // generic or piled-up labels add only noise
+		}
+		seen[key] = len(edges)
+		edges = append(edges, e)
+	}
+
+	var used []model.Category
+	for _, c := range g.Columns() {
+		if len(columns[c]) > 0 {
+			used = append(used, c)
+		}
+	}
+	colOf := map[string]int{}
+	for i, c := range used {
+		for _, n := range columns[c] {
+			colOf[n.ID] = i
+		}
+	}
+
+	// Barycenter ordering: move each box toward the average row of the
+	// boxes it is connected to in other columns. A few sweeps are plenty.
+	rowOf := map[string]float64{}
+	for _, c := range used {
+		for i, n := range columns[c] {
+			rowOf[n.ID] = float64(i)
+		}
+	}
+	neighbours := map[string][]string{}
+	for _, e := range edges {
+		if colOf[e.From] != colOf[e.To] {
+			neighbours[e.From] = append(neighbours[e.From], e.To)
+			neighbours[e.To] = append(neighbours[e.To], e.From)
+		}
+	}
+	for sweep := 0; sweep < 4; sweep++ {
+		for _, c := range used {
+			nodes := columns[c]
+			score := map[string]float64{}
+			for _, n := range nodes {
+				nb := neighbours[n.ID]
+				if len(nb) == 0 {
+					score[n.ID] = rowOf[n.ID]
+					continue
+				}
+				sum := 0.0
+				for _, m := range nb {
+					sum += rowOf[m]
+				}
+				score[n.ID] = sum / float64(len(nb))
+			}
+			sort.SliceStable(nodes, func(i, j int) bool {
+				if nodes[i].ID == model.InternetID {
+					return true
+				}
+				if nodes[j].ID == model.InternetID {
+					return false
+				}
+				return score[nodes[i].ID] < score[nodes[j].ID]
+			})
+			for i, n := range nodes {
+				rowOf[n.ID] = float64(i)
+			}
+		}
+	}
+
+	out := laidOut{pos: map[string]place{}, edges: edges}
+	rows := 0
+	for i, c := range used {
+		x := padX + i*(nodeW+colGap)
+		out.cols = append(out.cols, svgCol{X: x, Title: g.Title(c)})
+		for r, n := range columns[c] {
+			out.pos[n.ID] = place{x, padY + r*(nodeH+rowGap), i, r}
+			out.order = append(out.order, n)
+		}
+		rows = max(rows, len(columns[c]))
+	}
+	out.w = padX + len(used)*(nodeW+colGap) - colGap/2 + padX
+	out.h = padY + rows*(nodeH+rowGap) + padX
+	return out
+}
+
+// edgePath draws a soft curve between two boxes, from the side that faces
+// the other box. A line that skips a column travels in the gap above the
+// target's row, each in its own lane, so it never looks like it passes
+// through another box.
+func edgePath(a, b place, e model.Edge, lanes map[int]int) svgEdge {
+	ay, by := a.y+nodeH/2, b.y+nodeH/2
+	out := svgEdge{Risky: e.Risky, Label: e.Label}
+
+	if a.col == b.col {
+		x := a.x + nodeW
+		bend := colGap/2 - 6
+		out.D = fmt.Sprintf("M%d %d C%d %d %d %d %d %d", x, ay, x+bend, ay, x+bend, by, x, by)
+		out.LX, out.LY = x+bend/2, (ay+by)/2
+		return out
+	}
+
+	dir := 1
+	x1, x2 := a.x+nodeW, b.x
+	if a.col > b.col {
+		dir = -1
+		x1, x2 = a.x, b.x+nodeW
+	}
+	if a.col-b.col == 1 || b.col-a.col == 1 {
+		c := dir * colGap / 2
+		out.D = fmt.Sprintf("M%d %d C%d %d %d %d %d %d", x1, ay, x1+c, ay, x2-c, by, x2, by)
+		out.LX, out.LY = (x1+x2)/2, (ay+by)/2-6
+		if ay == by {
+			out.LY = ay - 6
+		}
+		return out
+	}
+
+	gap := b.row // the gap above the target's row
+	k := lanes[gap]
+	lanes[gap]++
+	lane := b.y - rowGap/2 + (k%5-2)*5
+	q := dir * colGap / 3
+	out.D = fmt.Sprintf("M%d %d C%d %d %d %d %d %d L%d %d C%d %d %d %d %d %d",
+		x1, ay, x1+q, ay, x1+q, lane, x1+2*q, lane,
+		x2-2*q, lane, x2-q, lane, x2-q, by, x2, by)
+	out.LX, out.LY = x1+2*q+dir*60, lane-5
+	return out
+}
+
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "…"
+}
+
+// clipCode shortens a code name so the name part stays readable:
+// "azurerm_linux_virtual_machine.main" keeps ".main", "sql: Microsoft.Sql/servers"
+// keeps "sql:".
+func clipCode(s string, n int) string {
+	if len([]rune(s)) <= n || strings.Contains(s, ": ") {
+		return clip(s, n)
+	}
+	i := strings.LastIndex(s, ".")
+	if i <= 0 || len(s)-i >= n-4 {
+		return clip(s, n)
+	}
+	suffix := s[i:]
+	return string([]rune(s)[:n-len([]rune(suffix))-1]) + "…" + suffix
+}

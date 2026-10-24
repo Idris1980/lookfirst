@@ -1,0 +1,42 @@
+# A typical "web app with a database and a cache" compose file from an AI
+# assistant. It runs, and it opens more than you think.
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://app:hunter2@db:5432/app
+      JWT_SECRET: "my-super-secret-jwt-key"
+    depends_on:
+      - db
+      - cache
+    volumes:
+      - ./uploads:/app/uploads
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  db:
+    image: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_PASSWORD=hunter2
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  cache:
+    image: redis:latest
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  admin:
+    image: dpage/pgadmin4:8.12
+    privileged: true
+    ports:
+      - "8080:80"
+    environment:
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+
+volumes:
+  pgdata:

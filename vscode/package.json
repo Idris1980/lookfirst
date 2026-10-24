@@ -1,0 +1,76 @@
+{
+  "name": "lookfirst",
+  "displayName": "LookFirst: See What Code Does Before You Run It",
+  "description": "Shows what code would build or do before you run it: a picture of servers, ports, files and websites it touches, and the risks in plain English. Reads the code without running it, and nothing leaves your computer.",
+  "version": "0.3.0",
+  "publisher": "idris1980",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Idris1980/lookfirst" },
+  "homepage": "https://github.com/Idris1980/lookfirst#readme",
+  "bugs": { "url": "https://github.com/Idris1980/lookfirst/issues" },
+  "engines": { "vscode": "^1.82.0" },
+  "categories": ["Linters", "Other"],
+  "keywords": ["security", "terraform", "docker", "kubernetes", "ai code", "secrets", "bicep"],
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "The extension only reads files. It never runs the code in the workspace."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "lookFirst.show",
+        "title": "Show in LookFirst",
+        "category": "LookFirst",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "lookFirst.check",
+        "title": "Check This File",
+        "category": "LookFirst"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        { "command": "lookFirst.show", "when": "lookFirst.supported", "group": "navigation" }
+      ],
+      "editor/context": [
+        { "command": "lookFirst.show", "when": "lookFirst.supported", "group": "navigation" }
+      ],
+      "explorer/context": [
+        { "command": "lookFirst.show", "group": "navigation" }
+      ]
+    },
+    "configuration": {
+      "title": "LookFirst",
+      "properties": {
+        "lookFirst.checkOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check supported files when you save them, and show risks in the Problems panel."
+        },
+        "lookFirst.checkOnPaste": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check code right after a larger piece is pasted or inserted (for example by an AI assistant), and warn about serious risks."
+        },
+        "lookFirst.pasteMinLines": {
+          "type": "number",
+          "default": 5,
+          "minimum": 2,
+          "description": "How many lines an insertion needs before it is checked."
+        },
+        "lookFirst.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Full path to a lookfirst program to use instead of the one that comes with the extension. Can only be set in your own user settings, never by a workspace."
+        }
+      }
+    }
+  }
+}

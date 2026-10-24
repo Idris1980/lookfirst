@@ -1,0 +1,4 @@
+bin/
+lookfirst-report.html
+vscode/bin/
+*.vsix

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>LookFirst report</title>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5d6673; --line: #d9dde3;
+  --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
+  --low: #2f6fb3; --low-bg: #e6f0fb;
+  --c-internet: #6b7280; --c-network: #2563eb; --c-security: #7c3aed; --c-compute: #0f8a7e;
+  --c-data: #c2410c; --c-other: #64748b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111418; --card: #1a1f25; --text: #e6e9ee; --muted: #9aa4b2; --line: #2c333c;
+    --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
+    --low: #6aa8ff; --low-bg: #16273d;
+    --c-internet: #9ca3af; --c-network: #6b9bff; --c-security: #a78bfa; --c-compute: #2dd4bf;
+    --c-data: #fb923c; --c-other: #94a3b8;
+  }
+}
+/* Inside VS Code the editor theme decides, not the system setting. */
+body.vscode-light {
+  --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5d6673; --line: #d9dde3;
+  --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
+  --low: #2f6fb3; --low-bg: #e6f0fb;
+  --c-internet: #6b7280; --c-network: #2563eb; --c-security: #7c3aed; --c-compute: #0f8a7e;
+  --c-data: #c2410c; --c-other: #64748b;
+}
+body.vscode-dark, body.vscode-high-contrast:not(.vscode-high-contrast-light) {
+  --bg: #111418; --card: #1a1f25; --text: #e6e9ee; --muted: #9aa4b2; --line: #2c333c;
+  --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
+  --low: #6aa8ff; --low-bg: #16273d;
+  --c-internet: #9ca3af; --c-network: #6b9bff; --c-security: #a78bfa; --c-compute: #2dd4bf;
+  --c-data: #fb923c; --c-other: #94a3b8;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1400px; margin: 0 auto; padding: 24px 16px 48px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 0 0 12px; }
+.sources { color: var(--muted); font-size: 13px; margin: 0 0 20px; word-break: break-all; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.summary p { margin: 0 0 6px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.chip { border-radius: 999px; padding: 2px 12px; font-size: 13px; font-weight: 600; }
+.chip.high { background: var(--high-bg); color: var(--high); }
+.chip.medium { background: var(--medium-bg); color: var(--medium); }
+.chip.low { background: var(--low-bg); color: var(--low); }
+.diagram { overflow-x: auto; }
+svg { display: block; font-family: inherit; }
+.coltitle { fill: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.5; }
+.edge.risky { stroke: var(--high); stroke-width: 2.5; stroke-dasharray: 6 4; }
+.edgelabel { font-size: 11px; fill: var(--muted); text-anchor: middle; paint-order: stroke; stroke: var(--card); stroke-width: 4px; }
+.edgelabel.risky { fill: var(--high); font-weight: 600; }
+.arrow { fill: var(--edge); }
+.arrow.risky { fill: var(--high); }
+.box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+.box.high { stroke: var(--high); stroke-width: 2.5; }
+.box.medium { stroke: var(--medium); stroke-width: 2; }
+.iconbg { opacity: .14; }
+.icon { fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.name { font-size: 14px; font-weight: 600; fill: var(--text); }
+.friendly { font-size: 12px; fill: var(--muted); }
+.code { font-size: 10px; fill: var(--muted); font-family: ui-monospace, Consolas, monospace; opacity: .85; }
+a.nodelink { cursor: pointer; }
+a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width: 2.5; }
+.where a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.where a:hover { color: var(--text); }
+.badge.high { fill: var(--high); } .badge.medium { fill: var(--medium); } .badge.low { fill: var(--low); }
+.badgetext { fill: #fff; font-size: 11px; font-weight: 700; text-anchor: middle; }
+.internet { color: var(--c-internet); } .network { color: var(--c-network); } .security { color: var(--c-security); }
+.compute { color: var(--c-compute); } .data { color: var(--c-data); } .other { color: var(--c-other); }
+.findings { list-style: none; margin: 0; padding: 0; }
+.findings li { border-left: 4px solid var(--line); padding: 8px 12px; margin-bottom: 10px; background: var(--bg); border-radius: 0 8px 8px 0; }
+.findings li.high { border-color: var(--high); } .findings li.medium { border-color: var(--medium); } .findings li.low { border-color: var(--low); }
+.ftitle { font-weight: 600; }
+.sev { font-size: 11px; font-weight: 700; text-transform: uppercase; margin-right: 6px; }
+.sev.high { color: var(--high); } .sev.medium { color: var(--medium); } .sev.low { color: var(--low); }
+.where { color: var(--muted); font-size: 12px; font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+.fdetail { margin: 4px 0 0; }
+.disclaimer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>LookFirst report</h1>
+  <p class="sources">Read without running: {{range $i, $s := .Sources}}{{if $i}}, {{end}}{{$s}}{{end}}</p>
+
+  <section class="card summary">
+    <h2>What this code would do</h2>
+    {{range .Summary}}<p>{{.}}</p>{{end}}
+    <div class="chips">
+      {{with .Counts.high}}<span class="chip high">{{.}} high</span>{{end}}
+      {{with .Counts.medium}}<span class="chip medium">{{.}} medium</span>{{end}}
+      {{with .Counts.low}}<span class="chip low">{{.}} low</span>{{end}}
+    </div>
+  </section>
+
+  {{if .Nodes}}
+  <section class="card">
+    <h2>What would be built</h2>
+    <div class="diagram">
+      <svg width="{{.W}}" height="{{.H}}" viewBox="0 0 {{.W}} {{.H}}" role="img" aria-label="Diagram of the resources and how they connect">
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow risky" d="M0 0L10 5L0 10z"/></marker>
+        </defs>
+        {{range .Cols}}<text class="coltitle" x="{{.X}}" y="28">{{.Title}}</text>{{end}}
+        {{range .Edges}}<path class="edge{{if .Risky}} risky{{end}}" d="{{.D}}" marker-end="{{if .Risky}}url(#ar){{else}}url(#a){{end}}"/>{{end}}
+        {{range .Edges}}{{if .Lines}}{{$e := .}}<text class="edgelabel{{if .Risky}} risky{{end}}" x="{{.LX}}" y="{{.LY}}">{{range $i, $l := .Lines}}<tspan x="{{$e.LX}}" dy="{{if $i}}12{{else}}0{{end}}">{{$l}}</tspan>{{end}}</text>{{end}}{{end}}
+        {{range .Nodes}}
+        {{if .Href}}<a class="nodelink" href="{{.Href}}">{{end}}
+        <g class="{{.Cat}}">
+          <title>{{.Tooltip}}</title>
+          <rect class="box{{if .Sev}} {{.Sev}}{{end}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="10"/>
+          <rect class="iconbg" x="{{.X}}" y="{{.Y}}" width="52" height="{{.H}}" rx="10" fill="currentColor"/>
+          <svg class="icon" x="{{.X}}" y="{{.Y}}" width="52" height="{{.H}}" viewBox="-10 -12 44 48" stroke="currentColor">{{.Icon}}</svg>
+          <text class="name" x="{{.X}}" y="{{.Y}}" dx="62" dy="{{if .Code}}24{{else}}30{{end}}">{{.Name}}</text>
+          <text class="friendly" x="{{.X}}" y="{{.Y}}" dx="62" dy="{{if .Code}}42{{else}}48{{end}}">{{.Friendly}}</text>
+          {{if .Code}}<text class="code" x="{{.X}}" y="{{.Y}}" dx="62" dy="59">{{.Code}}</text>{{end}}
+          {{if .Sev}}<circle class="badge {{.Sev}}" cx="{{.X}}" cy="{{.Y}}" r="10" transform="translate({{.W}} 0)"/><text class="badgetext" x="{{.X}}" y="{{.Y}}" dx="{{.W}}" dy="4">{{.Count}}</text>{{end}}
+        </g>
+        {{if .Href}}</a>{{end}}
+        {{end}}
+      </svg>
+    </div>
+  </section>
+  {{end}}
+
+  <section class="card">
+    <h2>What we found</h2>
+    {{if .Findings}}
+    <ul class="findings">
+      {{range .Findings}}
+      <li class="{{.Sev}}">
+        <div><span class="sev {{.Sev}}">{{.Sev}}</span><span class="ftitle">{{.Title}}</span></div>
+        <p class="fdetail">{{.Detail}}</p>
+        <div class="where">{{if .Href}}<a href="{{.Href}}" title="Open in the code">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if .Node}} · {{.Node}}{{end}}</div>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p>No known risks in what we checked.</p>
+    {{end}}
+  </section>
+
+  <p class="disclaimer">{{.Disclaimer}}</p>
+</main>
+</body>
+</html>

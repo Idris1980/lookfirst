@@ -1,0 +1,3 @@
+*.vsix
+.vscode/**
+bin/SHA256SUMS.txt
