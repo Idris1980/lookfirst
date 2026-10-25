@@ -91,6 +91,21 @@ sudo usermod -aG docker $USER
 		t.Error(`sudo's option -E was taken for a program`)
 	}
 
+	// The same download split over two lines, and autostart set up on three.
+	split := "curl -fsSL https://deb.nodesource.com/setup_22.x \\\n  -o /tmp/nodesource_setup.sh\nbash /tmp/nodesource_setup.sh\n" +
+		"systemctl enable --now docker\ncat > /etc/systemd/system/app.service <<EOF\nEOF\nsystemctl enable --now app.service\n"
+	g = Read([]source.File{{Path: "b.sh", Kind: source.Shell, Data: []byte(split)}})
+	got = map[string][]int{}
+	for _, f := range g.Findings {
+		got[f.Title] = append(got[f.Title], f.Line)
+	}
+	if !reflect.DeepEqual(got["Downloads code and runs it"], []int{3}) {
+		t.Errorf("download split over two lines: %v, want [3]", got["Downloads code and runs it"])
+	}
+	if n := len(got["Makes something start automatically"]); n != 1 {
+		t.Errorf("autostart reported %d times, want once", n)
+	}
+
 	// The shebang alone does not run bash.
 	g = Read([]source.File{{Path: "a.sh", Kind: source.Shell, Data: []byte("#!/bin/bash\necho hi\n")}})
 	if g.Node("program.bash") != nil {

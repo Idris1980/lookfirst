@@ -1,6 +1,10 @@
 package risk
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Idris1980/lookfirst/internal/model"
+)
 
 func TestSecretName(t *testing.T) {
 	secret := []string{"password", "admin_password", "DB_PASSWORD", "api_key", "apiKey", "client_secret",
@@ -70,6 +74,17 @@ func TestFromAnywhere(t *testing.T) {
 	}
 	if FromAnywhere([]string{"10.0.0.0/8", "VirtualNetwork"}) {
 		t.Error("a private range was taken for everyone")
+	}
+}
+
+func TestFallbackPassword(t *testing.T) {
+	g := &model.Graph{}
+	CheckSecret(g, "", "MYSQL_PASSWORD", "${WP_DB_PASSWORD:-change-me-wp}", "f", 1, "fix")
+	CheckSecret(g, "", "MYSQL_PASSWORD", "${WP_DB_PASSWORD}", "f", 2, "fix")
+	CheckSecret(g, "", "MYSQL_PASSWORD", "${WP_DB_PASSWORD:?set it}", "f", 3, "fix")
+	CheckSecret(g, "", "IMAGE_TAG", "${TAG:-latest}", "f", 4, "fix")
+	if len(g.Findings) != 1 || g.Findings[0].Title != "Password has a fallback value in the code" || g.Findings[0].Line != 1 {
+		t.Errorf("got %+v, want one fallback finding on line 1", g.Findings)
 	}
 }
 

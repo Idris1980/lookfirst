@@ -271,14 +271,15 @@ var savedTo = regexp.MustCompile(`\b(?:curl\b.*\s(?:-o|--output)|wget\b.*\s(?:-O
 // file and run on a later line, as in "curl … -o get-docker.sh" followed by
 // "sudo sh get-docker.sh". Nobody reads the file in between.
 func (s *scan) downloadThenRun() {
-	for i, l := range s.lines {
+	lines := s.logicalLines() // "curl … \" with "-o file" on the next line
+	for i, l := range lines {
 		m := savedTo.FindStringSubmatch(l.code)
 		if m == nil {
 			continue
 		}
 		name := filepath.Base(m[1])
 		runs := regexp.MustCompile(`(?:^|[;&|(]\s*)(?:sudo(?:\s+-\S+)*\s+)?(?:(?:(?:ba|z|da)?sh|python3?|node|perl|ruby)\s+)?['"]?(?:\.?/|[\w.-]+/)*` + regexp.QuoteMeta(name) + `['"]?(?:\s|$)`)
-		for _, later := range s.lines[i+1:] {
+		for _, later := range lines[i+1:] {
 			if runs.MatchString(strings.TrimSpace(later.code)) {
 				s.add(model.High, "Downloads code and runs it",
 					fmt.Sprintf("This line runs %s, which line %d downloads, without anyone reading it first. Whoever controls that address decides what runs on your machine, and it can change at any time. Download the file, read it, then run it.", name, l.n), later.n)
@@ -490,16 +491,28 @@ func (s *scan) files() {
 			s.add(model.Medium, "Touches sensitive files", fmt.Sprintf("The code refers to %s. Make sure it has a good reason to.", sf.what), l.n)
 		})
 	}
+	// Autostart is reported once per kind, at its first line: an installer
+	// that sets up a service does it on several lines, and it may be exactly
+	// what was asked for. It is how malware stays, too, so it is never left out.
 	for _, p := range persistence {
+		var at []int
 		s.each(p.re, func(l line, _ []string) {
 			if !writesFile.MatchString(l.code) && !strings.Contains(l.code, "crontab") && !strings.Contains(strings.ToLower(l.code), "schtasks") &&
 				!strings.Contains(l.code, "systemctl") && !strings.Contains(l.code, "Register-ScheduledTask") && !strings.Contains(l.code, "New-ScheduledTask") {
 				return
 			}
-			s.fileNode(p.what, "changes", l.n)
-			s.add(model.High, "Makes something start automatically",
-				fmt.Sprintf("The code changes %s, so something runs again every time you log in or the machine starts. This is how malware stays on a machine. Only accept it if you know exactly what is added.", p.what), l.n)
+			at = append(at, l.n)
 		})
+		if len(at) == 0 {
+			continue
+		}
+		s.fileNode(p.what, "changes", at[0])
+		where := ""
+		if len(at) > 1 {
+			where = fmt.Sprintf(" It does so on %d lines, starting here.", len(at))
+		}
+		s.add(model.Medium, "Makes something start automatically",
+			fmt.Sprintf("The code changes %s, so something runs again every time you log in or the machine starts.%s That is normal for an installer that sets up a service you asked for, and it is also how malware stays on a machine. Check that you know exactly what is added.", p.what, where), at[0])
 	}
 	s.each(deleteDangerous, func(l line, _ []string) {
 		s.fileNode("everything in a folder", "deletes", l.n)

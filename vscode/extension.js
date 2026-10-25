@@ -184,6 +184,10 @@ function showStatus(doc) {
   } else if (medium.length > 0) {
     status.text = `$(shield) ${medium.length} medium`;
     status.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+  } else if (items.length > 0) {
+    // Only low findings: worth knowing, nothing to worry about.
+    status.text = `$(shield) ${items.length} low`;
+    status.backgroundColor = undefined;
   } else {
     status.text = '$(shield) no known risks';
     status.backgroundColor = undefined;

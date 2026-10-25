@@ -27,6 +27,7 @@ var (
 		{regexp.MustCompile(`(?i)(postgres(ql)?|mysql|mongodb(\+srv)?|redis|amqp)://[^:/\s]+:[^@/\s]+@`), "a connection string with a password"},
 	}
 	// placeholders are values that are obviously not real secrets.
+	fallback    = regexp.MustCompile(`^\$\{(\w+)(:?-)([^}]*)\}$`)
 	placeholder = regexp.MustCompile(`(?i)^(\$\{.*\}|\$[A-Z_][A-Z0-9_]*|<.*>|x+|\*+|changeme_later|your[_-].*|todo|none|null|true|false|\{\{.*\}\}|«SECRET_\d+»)$`)
 )
 
@@ -58,6 +59,13 @@ func Placeholder(value string) bool {
 // into the code. The value is never repeated. fix tells how to do it right
 // in this kind of file.
 func CheckSecret(g *model.Graph, nodeID, name, value, file string, line int, fix string) bool {
+	// "${DB_PASSWORD:-changeme}" reads a variable, but silently uses the
+	// value written here when the variable is not set.
+	if m := fallback.FindStringSubmatch(strings.TrimSpace(value)); m != nil && m[3] != "" && SecretName(name) {
+		g.Add(model.Medium, nodeID, "Password has a fallback value in the code",
+			fmt.Sprintf("%s comes from the variable %s, but when that is not set, the value written here is used instead, without any warning. Remove the fallback, or write ${%s:?} so that it stops with an error when the variable is missing.", name, m[1], m[1]), file, line)
+		return true
+	}
 	if Placeholder(value) {
 		return false
 	}
