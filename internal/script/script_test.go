@@ -57,6 +57,33 @@ func TestLookalike(t *testing.T) {
 	}
 }
 
+// An install script as AI assistants write it: every risk is on its own line.
+func TestInstallScript(t *testing.T) {
+	sh := `#!/bin/bash
+sudo apt-get update && sudo apt-get upgrade -y
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+rm get-docker.sh
+sudo usermod -aG docker $USER
+`
+	g := Read([]source.File{{Path: "setup.sh", Kind: source.Shell, Data: []byte(sh)}})
+	got := map[string][]int{}
+	for _, f := range g.Findings {
+		got[f.Title] = append(got[f.Title], f.Line)
+	}
+	want := map[string][]int{
+		"Downloads code and runs it":                    {3, 5},
+		"User can take over the machine through Docker": {7},
+		"Runs with admin rights":                        {2},
+	}
+	for title, lines := range want {
+		if !reflect.DeepEqual(got[title], lines) {
+			t.Errorf("%q on lines %v, want %v", title, got[title], lines)
+		}
+	}
+}
+
 func TestStripComments(t *testing.T) {
 	cases := []struct {
 		kind      source.Kind

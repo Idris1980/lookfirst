@@ -216,8 +216,8 @@ var downloadRun = []struct {
 	re   *regexp.Regexp
 	what string
 }{
-	{regexp.MustCompile(`(curl|wget)\b[^|]*\|\s*(sudo\s+)?(ba|z|da)?sh\b`), "downloads a script and pipes it straight into the shell"},
-	{regexp.MustCompile(`(curl|wget)\b[^|]*\|\s*(sudo\s+)?(python3?|node|perl|ruby)\b`), "downloads code and pipes it straight into an interpreter"},
+	{regexp.MustCompile(`(curl|wget)\b[^|]*\|\s*(sudo(\s+-\S+)*\s+)?(ba|z|da)?sh\b`), "downloads a script and pipes it straight into the shell"},
+	{regexp.MustCompile(`(curl|wget)\b[^|]*\|\s*(sudo(\s+-\S+)*\s+)?(python3?|node|perl|ruby)\b`), "downloads code and pipes it straight into an interpreter"},
 	{regexp.MustCompile(`(ba)?sh\s+<\(\s*(curl|wget)`), "downloads a script and runs it"},
 	{regexp.MustCompile(`(?i)\b(iex|Invoke-Expression)\b.*\b(DownloadString|Invoke-WebRequest|iwr|irm|Invoke-RestMethod)\b`), "downloads a script and runs it"},
 	{regexp.MustCompile(`(?i)\b(DownloadString|Invoke-WebRequest|iwr|irm|Invoke-RestMethod)\b.*\|\s*(iex|Invoke-Expression)\b`), "downloads a script and runs it"},
@@ -247,6 +247,7 @@ func (s *scan) downloadAndRun() {
 				fmt.Sprintf("This line %s. Whoever controls that address decides what runs on your machine, and it can change at any time. Download the file, read it, then run it.", d.what), l.n)
 		})
 	}
+	s.downloadThenRun()
 	for _, re := range obfuscated {
 		s.each(re, func(l line, _ []string) {
 			s.add(model.High, "Hidden code is decoded and run",
@@ -258,6 +259,30 @@ func (s *scan) downloadAndRun() {
 			s.add(model.Medium, "Runs text as code",
 				"eval/exec turns text into code at run time. If any of that text comes from a user, a file or the network, an attacker can run anything.", l.n)
 		})
+	}
+}
+
+// savedTo finds a download written to a file: curl -o name, wget -O name.
+var savedTo = regexp.MustCompile(`\b(?:curl\b.*\s(?:-o|--output)|wget\b.*\s(?:-O|--output-document))[\s=]+['"]?([\w./-]+)`)
+
+// downloadThenRun finds the same thing in two steps: a script is saved to a
+// file and run on a later line, as in "curl … -o get-docker.sh" followed by
+// "sudo sh get-docker.sh". Nobody reads the file in between.
+func (s *scan) downloadThenRun() {
+	for i, l := range s.lines {
+		m := savedTo.FindStringSubmatch(l.code)
+		if m == nil {
+			continue
+		}
+		name := filepath.Base(m[1])
+		runs := regexp.MustCompile(`(?:^|[;&|(]\s*)(?:sudo(?:\s+-\S+)*\s+)?(?:(?:(?:ba|z|da)?sh|python3?|node|perl|ruby)\s+)?['"]?(?:\.?/|[\w.-]+/)*` + regexp.QuoteMeta(name) + `['"]?(?:\s|$)`)
+		for _, later := range s.lines[i+1:] {
+			if runs.MatchString(strings.TrimSpace(later.code)) {
+				s.add(model.High, "Downloads code and runs it",
+					fmt.Sprintf("This line runs %s, which line %d downloads, without anyone reading it first. Whoever controls that address decides what runs on your machine, and it can change at any time. Download the file, read it, then run it.", name, l.n), later.n)
+				break
+			}
+		}
 	}
 }
 
@@ -718,6 +743,11 @@ var weakening = []struct {
 		model.Medium, "Loads data in an unsafe way", "pickle and yaml.load can run code hidden in the data. Only load data you created yourself, or use json / yaml.safe_load."},
 }
 
+var (
+	sudoRe      = regexp.MustCompile(`^\s*sudo\b|[;&|]\s*sudo\b`)
+	dockerGroup = regexp.MustCompile(`\busermod\b[^;&|]*\s-\w*G\w*\s+(?:\S+,)*docker\b|\bgpasswd\s+-a\s+\S+\s+docker\b|\badduser\s+\S+\s+docker\b`)
+)
+
 func (s *scan) weakening() {
 	for _, w := range weakening {
 		s.each(w.re, func(l line, _ []string) {
@@ -728,8 +758,25 @@ func (s *scan) weakening() {
 		})
 	}
 	if s.f.Kind == source.Shell {
-		s.each(regexp.MustCompile(`^\s*sudo\b|[;&|]\s*sudo\b`), func(l line, _ []string) {
-			s.add(model.Low, "Runs with admin rights", "sudo runs this line as root, so a mistake here can affect the whole machine.", l.n)
+		// One finding for the whole script: install scripts use sudo on
+		// almost every line, and one note per line drowns the real risks.
+		var sudoLines []int
+		for _, l := range s.lines {
+			if sudoRe.MatchString(l.code) {
+				sudoLines = append(sudoLines, l.n)
+			}
+		}
+		switch len(sudoLines) {
+		case 0:
+		case 1:
+			s.add(model.Low, "Runs with admin rights", "sudo runs this line as root, so a mistake here can affect the whole machine.", sudoLines[0])
+		default:
+			s.add(model.Low, "Runs with admin rights",
+				fmt.Sprintf("sudo runs %d lines as root, starting here, so a mistake in any of them can affect the whole machine.", len(sudoLines)), sudoLines[0])
+		}
+		s.each(dockerGroup, func(l line, _ []string) {
+			s.add(model.Medium, "User can take over the machine through Docker",
+				"Members of the docker group can start a container that mounts the whole disk, and so become root without a password. Only add users who may be root anyway, or use rootless Docker.", l.n)
 		})
 	}
 }
