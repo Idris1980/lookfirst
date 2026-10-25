@@ -14,7 +14,7 @@ Open **[idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/)**
 
 In VS Code, LookFirst checks your files while you work, and can ask an AI to explain a problem and suggest a fix.
 
-1. Go to the newest [release](https://github.com/Idris1980/lookfirst/releases) and, under **Assets**, download the file for your computer:
+1. Go to the newest [release](https://github.com/Idris1980/lookfirst/releases) and, under **Assets**, download the file for your computer. You only need one file, ending in `.vsix`; the others are for the [command line](docs/command-line.md) and for checking the download.
 
    | Your computer | File |
    | --- | --- |
