@@ -27,10 +27,10 @@ var reportHTML string
 var report = template.Must(template.New("report").Parse(reportHTML))
 
 const (
-	nodeW, nodeH = 216, 72
-	colGap       = 84
-	rowGap       = 34
-	padX, padY   = 24, 92
+	nodeW, nodeH = 184, 60
+	colGap       = 68
+	rowGap       = 26
+	padX, padY   = 24, 80
 	maxRows      = 12 // more than this in one column is folded into "+N more"
 )
 
@@ -173,7 +173,7 @@ func buildProject(s Section, opt Options) project {
 		pos := l.pos[n.ID]
 		sn := svgNode{
 			X: pos.x, Y: pos.y, W: nodeW, H: nodeH,
-			Name: clip(n.Name, 23), Friendly: clip(n.Friendly, 27), Code: clipCode(n.Code, 25),
+			Name: clip(n.Name, 21), Friendly: clip(n.Friendly, 25), Code: clipCode(n.Code, 23),
 			Tooltip: n.Name + "\n" + n.Friendly, Icon: icon(n.Kind), Cat: strings.ToLower(n.Category.String()),
 		}
 		if n.File != "" {

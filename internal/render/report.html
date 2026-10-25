@@ -66,9 +66,9 @@ svg { display: block; font-family: inherit; }
 .box.medium { stroke: var(--medium); stroke-width: 2; }
 .iconbg { opacity: .14; }
 .icon { fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.name { font-size: 14px; font-weight: 600; fill: var(--text); }
-.friendly { font-size: 12px; fill: var(--muted); }
-.code { font-size: 10px; fill: var(--muted); font-family: ui-monospace, Consolas, monospace; opacity: .85; }
+.name { font-size: 13px; font-weight: 600; fill: var(--text); }
+.friendly { font-size: 11px; fill: var(--muted); }
+.code { font-size: 9.5px; fill: var(--muted); font-family: ui-monospace, Consolas, monospace; opacity: .85; }
 a.nodelink { cursor: pointer; }
 a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width: 2.5; }
 .where a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
@@ -156,13 +156,13 @@ a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width
         {{if .Href}}<a class="nodelink" href="{{.Href}}">{{end}}
         <g class="{{.Cat}}">
           <title>{{.Tooltip}}</title>
-          <rect class="box{{if .Sev}} {{.Sev}}{{end}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="10"/>
-          <rect class="iconbg" x="{{.X}}" y="{{.Y}}" width="52" height="{{.H}}" rx="10" fill="currentColor"/>
-          <svg class="icon" x="{{.X}}" y="{{.Y}}" width="52" height="{{.H}}" viewBox="-10 -12 44 48" stroke="currentColor">{{.Icon}}</svg>
-          <text class="name" x="{{.X}}" y="{{.Y}}" dx="62" dy="{{if .Code}}24{{else}}30{{end}}">{{.Name}}</text>
-          <text class="friendly" x="{{.X}}" y="{{.Y}}" dx="62" dy="{{if .Code}}42{{else}}48{{end}}">{{.Friendly}}</text>
-          {{if .Code}}<text class="code" x="{{.X}}" y="{{.Y}}" dx="62" dy="59">{{.Code}}</text>{{end}}
-          {{if .Sev}}<circle class="badge {{.Sev}}" cx="{{.X}}" cy="{{.Y}}" r="10" transform="translate({{.W}} 0)"/><text class="badgetext" x="{{.X}}" y="{{.Y}}" dx="{{.W}}" dy="4">{{.Count}}</text>{{end}}
+          <rect class="box{{if .Sev}} {{.Sev}}{{end}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/>
+          <rect class="iconbg" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" rx="8" fill="currentColor"/>
+          <svg class="icon" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" viewBox="-10 -12 44 48" stroke="currentColor">{{.Icon}}</svg>
+          <text class="name" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}20{{else}}25{{end}}">{{.Name}}</text>
+          <text class="friendly" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}35{{else}}41{{end}}">{{.Friendly}}</text>
+          {{if .Code}}<text class="code" x="{{.X}}" y="{{.Y}}" dx="53" dy="49">{{.Code}}</text>{{end}}
+          {{if .Sev}}<circle class="badge {{.Sev}}" cx="{{.X}}" cy="{{.Y}}" r="9" transform="translate({{.W}} 0)"/><text class="badgetext" x="{{.X}}" y="{{.Y}}" dx="{{.W}}" dy="4">{{.Count}}</text>{{end}}
         </g>
         {{if .Href}}</a>{{end}}
         {{end}}
