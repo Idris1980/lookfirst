@@ -74,6 +74,14 @@
     </div>
 
     <p id="status" class="status" role="status">Loading the reader…</p>
+
+    <div id="bicep-note" class="notice" hidden>
+      <p><strong>Bicep files cannot be read on this page.</strong> They need Microsoft's Bicep compiler, which only runs on a computer, not in a web browser. Two ways to check <span id="bicep-names"></span>:</p>
+      <ul>
+        <li>Open it in VS Code with the <a href="https://github.com/Idris1980/lookfirst#install-it-in-vs-code">LookFirst extension</a>, which uses the Bicep compiler on your computer.</li>
+        <li>Or turn it into an ARM template, which this page can read. Run <code id="bicep-cmd">az bicep build --file main.bicep</code> and open the <code>.json</code> file it makes here.</li>
+      </ul>
+    </div>
   </section>
 
   <section id="result" class="result" hidden>

@@ -26,10 +26,26 @@ async function load() {
   status('Ready. Nothing you check here leaves your browser.');
 }
 
+// Bicep needs Microsoft's compiler, which cannot run here. Such files are
+// set aside with an explanation rather than reported as a risk.
+function setAsideBicep(files) {
+  const bicep = files.filter((f) => /\.bicep$/i.test(f.name));
+  $('bicep-note').hidden = bicep.length === 0;
+  if (bicep.length > 0) {
+    const names = bicep.map((f) => f.name.split('/').pop());
+    $('bicep-names').textContent = names.length === 1 ? names[0] : `these ${names.length} files`;
+    $('bicep-cmd').textContent = `az bicep build --file "${names[0]}"`;
+  }
+  return files.filter((f) => !/\.bicep$/i.test(f.name));
+}
+
 function run(files) {
   if (!ready) return;
+  const hadBicep = files.some((f) => /\.bicep$/i.test(f.name));
+  files = setAsideBicep(files);
   if (files.length === 0) {
-    status('There was nothing to read.', true);
+    $('result').hidden = true;
+    status(hadBicep ? '' : 'There was nothing to read.', !hadBicep);
     return;
   }
   status('Reading…');

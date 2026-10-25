@@ -82,6 +82,14 @@ sudo usermod -aG docker $USER
 			t.Errorf("%q on lines %v, want %v", title, got[title], lines)
 		}
 	}
+	for _, p := range []string{"bash", "sh", "apt-get", "usermod"} {
+		if g.Node("program."+p) == nil {
+			t.Errorf("the picture is missing the program %q", p)
+		}
+	}
+	if g.Node("program.-E") != nil {
+		t.Error(`sudo's option -E was taken for a program`)
+	}
 }
 
 func TestStripComments(t *testing.T) {

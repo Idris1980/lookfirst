@@ -447,7 +447,8 @@ var (
 	openPort    = regexp.MustCompile(`\baz\s+vm\s+open-port\b.*--port\s+['"]?([0-9*,-]+)`)
 	interesting = set(`curl wget ssh scp rsync sftp ftp nc ncat netcat socat nmap az aws gcloud kubectl helm terraform
 	docker podman git sudo su chmod chown chattr mount useradd usermod passwd crontab systemctl powershell pwsh
-	cmd reg regsvr32 rundll32 mshta certutil bitsadmin wmic schtasks netsh iptables ufw setenforce openssl gpg base64 python python3 node npm pip pip3 npx`)
+	cmd reg regsvr32 rundll32 mshta certutil bitsadmin wmic schtasks netsh iptables ufw setenforce openssl gpg base64 python python3 node npm pip pip3 npx
+	sh bash zsh dash apt apt-get dnf yum apk snap brew choco winget`)
 	destructiveCLI = []struct {
 		re   *regexp.Regexp
 		what string
@@ -473,6 +474,13 @@ func (s *scan) programsRun() {
 				for len(f) > 0 && (f[0] == "sudo" || f[0] == "exec" || f[0] == "then" || f[0] == "do" || strings.Contains(f[0], "=")) {
 					if f[0] == "sudo" {
 						tools = append(tools, "sudo")
+						// Skip sudo's own options, so "sudo -E bash" runs bash.
+						for len(f) > 1 && strings.HasPrefix(f[1], "-") {
+							if opt := f[1]; (opt == "-u" || opt == "-g") && len(f) > 2 {
+								f = f[1:]
+							}
+							f = f[1:]
+						}
 					}
 					f = f[1:]
 				}
