@@ -90,6 +90,12 @@ sudo usermod -aG docker $USER
 	if g.Node("program.-E") != nil {
 		t.Error(`sudo's option -E was taken for a program`)
 	}
+
+	// The shebang alone does not run bash.
+	g = Read([]source.File{{Path: "a.sh", Kind: source.Shell, Data: []byte("#!/bin/bash\necho hi\n")}})
+	if g.Node("program.bash") != nil {
+		t.Error("the shebang was taken for running bash")
+	}
 }
 
 func TestStripComments(t *testing.T) {

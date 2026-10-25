@@ -468,6 +468,9 @@ func (s *scan) programsRun() {
 	shellLike := s.f.Kind == source.Shell || s.f.Kind == source.PowerShell || s.f.Kind == source.Dockerfile
 	for _, l := range s.lines {
 		var tools []string
+		if strings.HasPrefix(l.code, "#!") {
+			continue // the shebang names the shell that reads the file; it runs nothing itself
+		}
 		if shellLike {
 			for _, part := range regexp.MustCompile(`&&|\|\||;|\||\$\(|\bRUN\b`).Split(l.code, -1) {
 				f := strings.Fields(part)
