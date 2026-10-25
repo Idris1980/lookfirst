@@ -98,6 +98,39 @@ sudo usermod -aG docker $USER
 	}
 }
 
+// An Azure CLI script: what it builds is drawn, and az's defaults are checked
+// even when a command is split over several lines.
+func TestAzureCLI(t *testing.T) {
+	ps := "az storage account create --name $storageName --resource-group $rg\n" +
+		"az vm create --resource-group $rg --name \"TestVM\" `\n" +
+		"  --image Ubuntu2204 --generate-ssh-keys\n" +
+		"az vm create -g $rg -n Quiet --image Ubuntu2204 --nsg-rule NONE\n" +
+		"az vm create -g $rg -n Win --image Win2022Datacenter --nsg-rule RDP\n" +
+		"az postgres flexible-server create -g $rg --name $dbName --public-access all\n" +
+		"az sql server firewall-rule create -g $rg -s sql1 -n azure --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0\n"
+	g := Read([]source.File{{Path: "env.ps1", Kind: source.PowerShell, Data: []byte(ps)}})
+	got := map[string][]int{}
+	for _, f := range g.Findings {
+		got[f.Title] = append(got[f.Title], f.Line)
+	}
+	want := map[string][]int{
+		"SSH (port 22) is open to the internet":                    {2},
+		"Remote Desktop (RDP) (port 3389) is open to the internet": {5},
+		"Database open to the whole internet":                      {6},
+		"Database open to all of Azure":                            {7},
+	}
+	for title, lines := range want {
+		if !reflect.DeepEqual(got[title], lines) {
+			t.Errorf("%q on lines %v, want %v", title, got[title], lines)
+		}
+	}
+	for _, id := range []string{"azure.storage.$storageName", "azure.vm.TestVM", "azure.vm.Quiet", "azure.database.$dbName"} {
+		if g.Node(id) == nil {
+			t.Errorf("the picture is missing %q", id)
+		}
+	}
+}
+
 func TestStripComments(t *testing.T) {
 	cases := []struct {
 		kind      source.Kind

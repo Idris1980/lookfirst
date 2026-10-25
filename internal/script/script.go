@@ -22,13 +22,14 @@ import (
 var Titles = map[model.Category]string{
 	model.Internet: "Internet",
 	model.Compute:  "Your code",
+	model.Network:  "In the cloud",
 	model.Security: "Programs it runs",
 	model.Data:     "Files",
 	model.Other:    "Packages",
 }
 
 // Order puts the code next to the internet and the things it touches.
-var Order = []model.Category{model.Internet, model.Compute, model.Data, model.Security, model.Other}
+var Order = []model.Category{model.Internet, model.Compute, model.Network, model.Data, model.Security, model.Other}
 
 var friendly = map[source.Kind]string{
 	source.Python: "Python script", source.JavaScript: "JavaScript", source.Shell: "shell script",
@@ -85,6 +86,7 @@ func (s *scan) run() {
 	s.files()
 	s.listening()
 	s.programsRun()
+	s.azureCLI()
 	s.packagesUsed()
 	s.secrets()
 	s.weakening()
@@ -283,6 +285,157 @@ func (s *scan) downloadThenRun() {
 				break
 			}
 		}
+	}
+}
+
+// --- Azure CLI ----------------------------------------------------------
+
+var (
+	azCommand = regexp.MustCompile(`(?:^|[;&|({=]\s*)az\s+(.*)`)
+
+	// azCreates are the az commands that build something, and how to draw it.
+	azCreates = []struct {
+		cmd            *regexp.Regexp
+		kind, friendly string
+	}{
+		{regexp.MustCompile(`^vm\s+create\b`), "vm", "virtual machine in Azure"},
+		{regexp.MustCompile(`^(postgres|mysql)\s+(flexible-server\s+|server\s+)?create\b`), "database", "database in Azure"},
+		{regexp.MustCompile(`^sql\s+server\s+create\b`), "database", "SQL server in Azure"},
+		{regexp.MustCompile(`^storage\s+account\s+create\b`), "storage", "storage account in Azure"},
+		{regexp.MustCompile(`^(webapp|functionapp)\s+create\b`), "webapp", "web app in Azure"},
+		{regexp.MustCompile(`^aks\s+create\b`), "kubernetes", "Kubernetes in Azure"},
+		{regexp.MustCompile(`^keyvault\s+create\b`), "key", "key vault in Azure"},
+		{regexp.MustCompile(`^(containerapp|container)\s+create\b`), "container", "container in Azure"},
+		{regexp.MustCompile(`^network\s+vnet\s+create\b`), "network", "virtual network in Azure"},
+	}
+	azFirewallRule = regexp.MustCompile(`^((postgres|mysql)\s+(flexible-server\s+|server\s+)?|sql\s+server\s+)firewall-rule\s+create\b`)
+	windowsImage   = regexp.MustCompile(`(?i)win`)
+)
+
+// logicalLines joins commands split over several lines with a trailing
+// backslash (shell) or backtick (PowerShell), so their flags are read together.
+func (s *scan) logicalLines() []line {
+	var out []line
+	var cur strings.Builder
+	start := 0
+	for _, l := range s.lines {
+		t := strings.TrimRight(l.code, " \t")
+		if cur.Len() == 0 {
+			start = l.n
+		}
+		if strings.HasSuffix(t, `\`) || (s.f.Kind == source.PowerShell && strings.HasSuffix(t, "`")) {
+			cur.WriteString(t[:len(t)-1] + " ")
+			continue
+		}
+		cur.WriteString(t)
+		out = append(out, line{start, cur.String()})
+		cur.Reset()
+	}
+	if cur.Len() > 0 {
+		out = append(out, line{start, cur.String()})
+	}
+	return out
+}
+
+// azFlag returns the value of the first of names given on an az command line.
+func azFlag(args string, names ...string) (string, bool) {
+	for _, n := range names {
+		re := regexp.MustCompile(`(?:^|\s)` + regexp.QuoteMeta(n) + `(?:\s+|=)("[^"]*"|'[^']*'|\S+)`)
+		if m := re.FindStringSubmatch(args); m != nil {
+			return strings.Trim(m[1], `"'`), true
+		}
+	}
+	return "", false
+}
+
+// azureCLI draws what az commands in a script would create in Azure, and
+// checks the settings that open it to the internet. Some of them are az's
+// defaults, so the risk is there even though the code does not name it.
+func (s *scan) azureCLI() {
+	if s.f.Kind != source.Shell && s.f.Kind != source.PowerShell {
+		return
+	}
+	for _, l := range s.logicalLines() {
+		m := azCommand.FindStringSubmatch(l.code)
+		if m == nil {
+			continue
+		}
+		args := m[1]
+		if azFirewallRule.MatchString(args) {
+			start, _ := azFlag(args, "--start-ip-address")
+			end, _ := azFlag(args, "--end-ip-address")
+			s.databaseAccess(s.me, start+"-"+end, l.n)
+			continue
+		}
+		for _, c := range azCreates {
+			if !c.cmd.MatchString(args) {
+				continue
+			}
+			var verb []string
+			for _, w := range strings.Fields(args) {
+				if strings.HasPrefix(w, "-") {
+					break
+				}
+				verb = append(verb, w)
+			}
+			name, _ := azFlag(args, "--name", "-n")
+			if name == "" {
+				name = c.friendly
+			}
+			id := "azure." + c.kind + "." + name
+			s.g.AddNode(&model.Node{ID: id, Name: name, Kind: c.kind, Friendly: c.friendly, Code: "az " + strings.Join(verb, " "),
+				Category: model.Network, File: s.f.Path, Line: l.n})
+			s.g.Connect(s.me, id, "", false)
+
+			switch c.kind {
+			case "database":
+				if v, ok := azFlag(args, "--public-access"); ok {
+					s.databaseAccess(id, v, l.n)
+				}
+			case "storage":
+				if v, ok := azFlag(args, "--allow-blob-public-access"); ok && strings.EqualFold(v, "true") {
+					s.g.Expose(id, "public read", true)
+					s.g.Add(model.High, id, "Files can be made public",
+						"--allow-blob-public-access true lets containers in this account be opened to anyone on the internet. Leave it out, or set it to false.", s.f.Path, l.n)
+				}
+			case "vm":
+				rule, named := azFlag(args, "--nsg-rule")
+				if strings.EqualFold(rule, "none") {
+					break
+				}
+				if v, ok := azFlag(args, "--public-ip-address"); ok && v == "" {
+					break // no public address
+				}
+				port := 22
+				if image, _ := azFlag(args, "--image"); strings.EqualFold(rule, "rdp") || (!named && windowsImage.MatchString(image)) {
+					port = 3389
+				}
+				portName, _ := risk.PortName(port)
+				why := fmt.Sprintf("az vm create opens port %d to every address by default, even though no port is named here", port)
+				if named {
+					why = fmt.Sprintf("--nsg-rule %s opens port %d to every address, not just yours", rule, port)
+				}
+				s.g.Expose(id, fmt.Sprintf("port %d", port), true)
+				s.g.Add(model.High, id, fmt.Sprintf("%s (port %d) is open to the internet", portName, port),
+					why+", and bots find open login ports within minutes. Use --nsg-rule NONE, then allow the port only from your own IP address with az network nsg rule create … --source-address-prefixes.", s.f.Path, l.n)
+			}
+		}
+	}
+}
+
+// databaseAccess checks which addresses may reach a database: "all" or a
+// range over every address is the whole internet, "0.0.0.0" all of Azure.
+func (s *scan) databaseAccess(id, value string, ln int) {
+	switch v := strings.ToLower(strings.TrimSpace(value)); v {
+	case "all", "0.0.0.0-255.255.255.255":
+		if id != s.me {
+			s.g.Expose(id, "all addresses", true)
+		}
+		s.g.Add(model.High, id, "Database open to the whole internet",
+			"This lets every IP address in the world try to connect to the database. Allow only the addresses that need it, such as your own, or use private access in a virtual network.", s.f.Path, ln)
+	case "0.0.0.0", "0.0.0.0-0.0.0.0", "azureservices":
+		s.g.Add(model.Medium, id, "Database open to all of Azure",
+			"This allows every Azure service to connect, including services owned by other customers. Prefer private access in a virtual network.", s.f.Path, ln)
 	}
 }
 
