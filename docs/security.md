@@ -36,7 +36,7 @@ Files over 2 MB and folders with more than 500 files are not read, and symbolic 
 Every file in a [release](https://github.com/Idris1980/lookfirst/releases) is built by GitHub Actions from this repository and signed with Sigstore. Check one before you install it with the [GitHub CLI](https://cli.github.com/):
 
 ```
-gh attestation verify lookfirst-win32-x64-0.10.0.vsix --repo Idris1980/lookfirst
+gh attestation verify lookfirst-win32-x64-0.11.0.vsix --repo Idris1980/lookfirst
 ```
 
 It should say `Verification succeeded`. Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`) listing everything the program is built from.

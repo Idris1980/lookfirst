@@ -2,7 +2,7 @@
   "name": "lookfirst",
   "displayName": "LookFirst: See What Code Does Before You Run It",
   "description": "Shows what code would build or do before you run it: a picture of servers, ports, files and websites it touches, and the risks in plain English. Reads the code without running it. Nothing leaves your computer unless you ask the AI to explain a problem, and then you see exactly what is sent.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publisher": "idris1980",
   "license": "MIT",
   "icon": "media/icon.png",
