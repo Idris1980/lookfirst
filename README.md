@@ -2,143 +2,89 @@
 
 **See what code does before you run it.**
 
-Code from an AI assistant, a forum or a tutorial often works, and often does more than you think: it opens ports to the whole internet, writes passwords into files, downloads and runs other scripts, or makes itself start every time you log in. LookFirst reads the code, without running it, and shows you:
+Code from an AI assistant, a forum or a tutorial often works, and often does more than you think: it opens your server to the whole internet, writes passwords into files, downloads and runs other scripts, or makes itself start every time you log in. LookFirst reads the code, without running it, and shows you what it would do, as a picture and as a list of risks in plain English.
 
-- **A picture** of what it would build or touch: servers, firewalls, databases, containers, the websites it talks to, files on your computer, programs it starts and packages it pulls in.
-- **The risks in plain English**, each with the line it is on and how to fix it.
+![A LookFirst report: a picture of what a Python script touches, with its risks listed below](docs/images/report.png)
 
-**Try it in your browser: [idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/)** (it runs in the page; your code is not sent anywhere).
+## Try it now, nothing to install
 
-It also works as a VS Code extension, as a GitHub Action for pull requests and as a single command-line program. Nothing leaves your computer, unless you ask the AI in VS Code to explain a problem and suggest a fix, and then you see exactly what is sent first.
+Open **[idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/)**, paste some code or choose a file, and you get the picture and the list. Everything happens inside your browser: your code is not sent anywhere.
 
-## What it reads
+## Install it in VS Code
 
-| Infrastructure | Programs | Package lists |
-| --- | --- | --- |
-| Terraform (Azure, AWS) | Python | package.json |
-| Bicep and ARM templates | JavaScript and TypeScript | requirements.txt |
-| docker-compose | Shell scripts | |
-| Kubernetes manifests | PowerShell | |
-| | Dockerfiles | |
+In VS Code, LookFirst checks your files while you work, and can ask an AI to explain a problem and suggest a fix.
 
-Point it at a whole repository and each folder with code gets its own picture, with an overview that puts the riskiest first.
+1. Go to the newest [release](https://github.com/Idris1980/lookfirst/releases) and, under **Assets**, download the file for your computer:
 
-## What it looks for
+   | Your computer | File |
+   | --- | --- |
+   | Windows | `lookfirst-win32-x64-….vsix` |
+   | Mac with Apple chip (M1 or later) | `lookfirst-darwin-arm64-….vsix` |
+   | Mac with Intel chip | `lookfirst-darwin-x64-….vsix` |
+   | Linux | `lookfirst-linux-x64-….vsix` |
 
-- Ports open to the whole internet, such as SSH, RDP and databases
-- Passwords, keys and tokens written into the code
-- Storage and databases that anyone can reach
-- Scripts that download code and run it (`curl … | bash`, `iex (… DownloadString …)`)
-- Hidden code that is decoded and run
-- Code that reads SSH keys, cloud credentials or browser passwords, especially when it also talks to the internet
-- Changes that make something start automatically
-- `rm -rf` on a path that may be empty, and other destructive commands
-- Antivirus, firewall or certificate checks being switched off
-- Package names that look like misspellings of well-known packages, packages installed straight from an address, and extra package servers
-- npm install scripts that download or run something
-- Privileged containers, the Docker socket mounted into a container, and similar container escapes
-- Placeholders someone forgot to fill in, such as `"YOUR_IP_ADDRESS"` or `"<your-subscription-id>"`
-- Syntax errors, using the language's own parser
+2. In VS Code, open **Extensions** in the left bar (or press `Ctrl+Shift+X`, `Cmd+Shift+X` on a Mac).
+3. Click **…** at the top of the Extensions list and choose **Install from VSIX…**.
+4. Pick the file you downloaded. When VS Code says it is installed, you are done.
 
 ## Using it
 
-**In VS Code:** right-click a file or folder and choose **Show in LookFirst**. Click a box in the picture, or a finding in the list, to jump to that line. Files are also checked when you save them, and right after a larger piece of code is pasted.
+- **Open a file.** LookFirst checks it straight away, and again every time you save, and right after you paste a larger piece of code.
+- **Look at the bottom bar.** The shield shows how it went: red with *high* means something serious, yellow with *medium* means something worth a look, *no known risks* means LookFirst found nothing.
+- **Look for squiggly lines.** Every problem is underlined in the code. Hover over it to read what is wrong and how to fix it. All problems are also listed under **Problems** (`Ctrl+Shift+M`).
+- **See the picture.** Right-click the file, or a whole folder, and choose **Show in LookFirst**. Click a box in the picture, or a problem in the list, to jump to that line. A folder with several projects gets one picture per project, with the riskiest first.
 
-**Explain and fix with AI:** next to each finding, and on the light bulb of each squiggle, LookFirst can ask the AI model you already use in VS Code (such as GitHub Copilot, including Copilot Free) to explain the problem in plain language and suggest a fix, or, if you prefer, Claude through your own Anthropic API key, stored encrypted in VS Code's secret storage. It is off until you turn it on. Only about 30 lines around the problem are sent, with passwords and keys replaced by placeholders such as `«SECRET_1»`; you see the exact text and choose Send or Cancel every time. A suggested fix is shown as a comparison with your code and changes the file only when you choose Apply.
+## Ask the AI to explain a problem
 
-**On the command line:**
+Next to each problem in the picture, and in the light bulb on each squiggle, there is **Explain and fix with AI**. It is off until you turn it on, and it works like this:
 
-```
-lookfirst read main.tf
-lookfirst read --open ./infra
-lookfirst read --format json ./scripts
-lookfirst read --format markdown --fail-on high .
-lookfirst excerpt --line 42 main.tf
-```
+1. LookFirst takes the lines around the problem, about 30 lines, not the whole file.
+2. It replaces every password and key in them with a placeholder such as `«SECRET_1»`. The real values stay on your computer.
+3. It shows you exactly the text it is about to send. You choose **Send** or **Cancel**, every time, unless you choose **Send, and stop asking**.
+4. The answer explains the problem in plain language and suggests a fix, shown next to your code so you can compare.
+5. Your file is changed only if you choose **Apply**. The real passwords are put back in at that moment, on your computer.
 
-`--format` is `text` (the default), `json`, `markdown` or `github` (annotations for GitHub Actions). `--fail-on high` (or `medium`, `low`) exits with code 3 when there is a finding that severe, so a pipeline can stop. `--changed paths.txt` (one path per line) is for pull requests: the Markdown summary shows the findings in those files first, and `--fail-on` only counts them. `excerpt` prints the lines around a line with secrets masked, as JSON; the extension uses it before it asks an AI model.
+It uses the AI you already have in VS Code, such as GitHub Copilot; **Copilot Free** is enough and costs nothing. If you have an Anthropic API key, you can use Claude through it instead (billed by Anthropic). The details are in the [extension's guide](vscode/README.md).
 
-### On GitHub
+## What it looks for
 
-Add LookFirst to a repository, and every pull request shows the problems on the changed lines, a summary on the run page, a comment that stays up to date, and the full picture to download:
+- Servers and databases open to the whole internet
+- Passwords, keys and tokens written into the code
+- Storage that anyone can read
+- Scripts that download other code and run it, or hide code and run it
+- Code that reads your SSH keys, cloud logins or browser passwords
+- Code that makes itself start automatically
+- Commands that can delete much more than intended
+- Antivirus, firewall or security checks being switched off
+- Packages with names that look like misspellings of well-known ones
+- Placeholders someone forgot to fill in, such as `"YOUR_IP_ADDRESS"`
+- Syntax errors
 
-```yaml
-# .github/workflows/lookfirst.yml
-name: LookFirst
-on: pull_request
-permissions:
-  contents: read
-  pull-requests: write # for the summary comment
-jobs:
-  lookfirst:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: Idris1980/lookfirst@v0.8.0
-        with:
-          path: .          # files or folders, separated by spaces
-          fail-on: high    # or medium, low, none
-```
+It reads Terraform, Bicep and ARM templates, docker-compose, Kubernetes, Python, JavaScript and TypeScript, shell scripts, PowerShell, Dockerfiles, `package.json` and `requirements.txt`.
 
-In a pull request, LookFirst looks at the change: only the files it changes get markings on their lines, the comment starts with their findings, and `fail-on` only counts them, so old problems elsewhere neither crowd out nor block the change. Everything else that was read is folded away in the comment and is in the full report. The action builds LookFirst from the source of the version you name, so what runs is exactly the code in this repository. It needs no secrets, and in pull requests from forks it still marks the lines; only the comment is skipped.
+## Is it safe to use?
 
-### In the browser
+- **Your code is never run.** LookFirst only reads it, like a person reading a printout.
+- **Nothing is sent anywhere**, except when you ask the AI and approve the exact text first.
+- **The report cannot run anything.** It is a plain page with no scripts.
+- **A downloaded project cannot change LookFirst.** The AI can only be turned on in your own settings.
 
-[idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/) has the same reader, compiled to WebAssembly. Paste code, open files or a folder, or try one of the examples. The page may only load its own files, so there is nowhere your code could be sent. Bicep files are the exception that does not work there, because they need Microsoft's compiler.
+How this is done, and how to check that a download really comes from this project, is described in [How LookFirst keeps you safe](docs/security.md).
 
-### Compare with Azure
+## What it cannot do
 
-Reading has a limit: a template that says nothing about public access can still give you a storage account anyone can read, because that is Azure's default. `lookfirst try` asks Azure itself:
+LookFirst tells you what it found. It cannot promise that code is safe: code written on purpose to hide what it does can get past any tool that only reads it. Read what LookFirst shows you, and when in doubt, don't run it.
 
-```
-lookfirst try main.bicep            # free: Azure's what-if preview, nothing is built
-lookfirst try --deploy main.bicep   # builds it for real, reads it, deletes it
-lookfirst try --cleanup             # removes groups an interrupted run left behind
-```
+On the web page, Bicep files cannot be read, because they need Microsoft's Bicep compiler on your computer. Use VS Code for those.
 
-It creates an empty, temporary resource group (tagged `lookfirst=try`, with an expiry time), asks Azure what the template would create there, reads Azure's answer with the same rules as the code, and shows what Azure adds: resources the file does not name, and risks that only appear with Azure's defaults. With `--deploy` it builds the resources, reads what was really built, and deletes the group right after. It asks before it creates anything, uses your own `az login`, and deletes the group even if you press Ctrl+C. Bicep and ARM templates for now.
+## For developers
 
-## Safe by design
+LookFirst also works outside VS Code:
 
-- **The code is never run.** It is read as text. Syntax checks ask the language's own parser to read the file (`node --check`, `bash -n`, Python's `ast.parse`, the PowerShell parser), which never runs it. Bicep is compiled locally with `--no-restore`, so no modules are downloaded.
-- **Nothing is sent anywhere** by the program. The exceptions are the opt-in AI explanation in VS Code and `lookfirst try`, which sends the template to your own Azure subscription, both described above.
-- **Secrets are masked before anything is shown to an AI model.** Known key formats, values of settings named like passwords, multi-line private keys and long random strings are replaced, and the tests check that no secret in the examples survives masking.
-- **The report runs no scripts.** It is a plain HTML page with a Content-Security-Policy that forbids scripts and network access. In VS Code it is shown with scripts switched off; its links can only open files that are part of the report, or ask the AI (which asks you first). The AI's answer is shown as plain text, never as code that runs.
-- **A workspace cannot change how the extension behaves.** The program it runs and the AI settings can only be set in your own user settings, so a downloaded repository cannot turn on the AI or stop it from asking.
-- **Inputs are limited** in size and number, and symbolic links are not followed.
-
-## Limits
-
-LookFirst tells you what it found. It cannot promise that code is safe: code written to hide what it does can get past any tool that only reads it. For Azure templates, `lookfirst try` closes part of that gap by asking Azure what would really be built.
-
-## Installing
-
-Download the `.vsix` for your platform from [Releases](https://github.com/Idris1980/lookfirst/releases) and install it:
-
-```
-code --install-extension lookfirst-win32-x64-0.8.0.vsix
-```
-
-Every file in a release is built by GitHub Actions from this repository and signed with Sigstore. Check a file before you install it:
-
-```
-gh attestation verify lookfirst-win32-x64-0.8.0.vsix --repo Idris1980/lookfirst
-```
-
-Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`).
-
-## Building
-
-Requires Go 1.27 or later.
-
-```
-go test ./...
-go build -o lookfirst.exe ./cmd/lookfirst
-```
-
-`scripts/build.ps1` builds the program for Windows, macOS and Linux and puts it in the VS Code extension; `scripts/build.ps1 -Package` also makes one `.vsix` per platform.
-
-The examples in `examples/` contain risky code on purpose, with made-up keys and addresses, and the tests check that every one of them is still found.
+- [On the command line](docs/command-line.md): one program for Windows, macOS and Linux, for scripts and build pipelines
+- [On GitHub](docs/github-action.md): checks every pull request and marks the problems on the changed lines
+- [Comparing a template with Azure](docs/compare-with-azure.md): asks Azure what a Bicep or ARM template would really build
+- [Developing LookFirst](docs/development.md): building, testing and how the code is organised
 
 ## License
 
