@@ -20,6 +20,10 @@ const secretFix = "put it in a .env file that is not committed, or use Docker se
 
 var databaseImage = regexp.MustCompile(`(?i)(^|/)(postgres|postgis|mysql|mariadb|mongo|redis|valkey|elasticsearch|opensearch|mcr\.microsoft\.com/mssql|mssql|cassandra|couchdb|influxdb|neo4j|rabbitmq|memcached|clickhouse)`)
 
+// adminImage matches web panels that give whoever logs in full control of a
+// database. Bots look for them, so publishing one matters more than a website.
+var adminImage = regexp.MustCompile(`(?i)(^|/)(phpmyadmin|adminer|pgadmin4?|mongo-express|redis-commander)(:|@|$)`)
+
 func Read(files []source.File) *model.Graph {
 	g := &model.Graph{}
 	for _, f := range files {
@@ -97,6 +101,10 @@ func service(g *model.Graph, file, name string, svc *yaml.Node) {
 			}
 			g.Add(model.High, me, fmt.Sprintf("%s is published on every network interface", what),
 				fmt.Sprintf("Port %s is reachable by every machine that can reach this host, and from the internet if the host is public. Docker also bypasses firewalls such as ufw. Use \"127.0.0.1:%s:%s\" if only this machine needs it.", published, published, target), file, p.Line)
+			g.Expose(me, label, true)
+		case adminImage.MatchString(yamlx.Str(yamlx.Get(svc, "image"))):
+			g.Add(model.Medium, me, "Database admin panel is published on every network interface",
+				fmt.Sprintf("Whoever logs in here controls the whole database, and bots look for panels like this. Port %s is reachable by every machine that can reach this host, and Docker bypasses firewalls such as ufw. Use \"127.0.0.1:%s:%s\" so only this machine can open it.", published, published, target), file, p.Line)
 			g.Expose(me, label, true)
 		default:
 			g.Add(model.Low, me, fmt.Sprintf("Port %s is published on every network interface", published),

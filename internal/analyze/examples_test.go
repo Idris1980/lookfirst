@@ -51,6 +51,7 @@ var expectations = []struct {
 		"PostgreSQL is published on every network interface",
 		"Container runs privileged",
 		"Image version is not pinned",
+		"Database admin panel is published on every network interface",
 	}, notWant: []string{
 		"Redis (port 6379) is published on every network interface", // bound to 127.0.0.1
 	}},
