@@ -25,9 +25,20 @@ resource "aws_security_group" "web" {
   }
 }
 
+resource "tls_private_key" "ssh" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "web" {
+  key_name   = "web-key"
+  public_key = tls_private_key.ssh.public_key_openssh
+}
+
 resource "aws_instance" "web" {
   ami                         = "ami-0c55b159cbfafe1f0"
   instance_type               = "t3.micro"
+  key_name                    = aws_key_pair.web.key_name
   vpc_security_group_ids      = [aws_security_group.web.id]
   associate_public_ip_address = true
 }

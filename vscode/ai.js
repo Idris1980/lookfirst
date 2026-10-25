@@ -123,7 +123,7 @@ ${actions}
 // findLeftovers returns placeholders such as "YOUR_IP_ADDRESS" in code. It
 // matches the same patterns as the lookfirst program (internal/risk), so the
 // panel warns about what LookFirst would report after Apply.
-const LEFTOVER = /["'`]((?:your|my)[_-][a-z0-9_.-]+|<[^<>"'`\n]*\byour\b[^<>"'`\n]*>|replace[_-]?(?:me|this|with[_-][a-z0-9_-]+)|change[_-]?me|insert[_-][a-z0-9_-]+|xxx\.xxx\.xxx\.xxx|0{8}-0{4}-0{4}-0{4}-0{12})["'`]/gi;
+const LEFTOVER = /["'`](your[_-][a-z0-9_.-]+|<[^<>"'`\n]*\byour\b[^<>"'`\n]*>|replace[_-]?(?:me|this|with[_-][a-z0-9_-]+)|change[_-]?me|insert[_-][a-z0-9_-]+|xxx\.xxx\.xxx\.xxx|0{8}-0{4}-0{4}-0{4}-0{12})["'`]/gi;
 
 function findLeftovers(code) {
   const found = new Set();

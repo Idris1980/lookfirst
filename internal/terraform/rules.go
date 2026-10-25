@@ -52,6 +52,10 @@ func check(c *config, g *model.Graph) {
 					"Passwords can be guessed. Use SSH keys only by setting disable_password_authentication = true.", r.file, line(r.body, "disable_password_authentication", r.line))
 			}
 
+		case "tls_private_key":
+			add(model.Medium, r.id(), "Private key is saved in the Terraform state",
+				"Terraform stores this private key unencrypted in its state file (terraform.tfstate), and sensitive = true does not change that. Anyone who can read the state can log in with it. Create the key yourself, for example with ssh-keygen, and give Terraform only the public key.", r.file, r.line)
+
 		case "azurerm_storage_account":
 			if v, set := boolean(r.body, "allow_nested_items_to_be_public"); set && v {
 				add(model.High, r.id(), "Files can be made public",

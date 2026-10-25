@@ -39,6 +39,7 @@ var expectations = []struct {
 		"Every port is open to the internet",
 		"Database reachable from the internet",
 		"Bucket is public",
+		"Private key is saved in the Terraform state",
 	}},
 	{dir: "bicep", bicep: true, want: []string{
 		"Password has a default value in the code",

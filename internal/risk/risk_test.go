@@ -94,6 +94,7 @@ func TestLeftovers(t *testing.T) {
 		`description = "Stores your files"`,
 		`source_address_prefix = "203.0.113.10/32"`,
 		`image = "myregistry.azurecr.io/shop:1.0"`,
+		`name = "my-vnet"`,
 	} {
 		if got := Leftovers(line); len(got) != 0 {
 			t.Errorf("Leftovers(%q) = %q, want none", line, got)

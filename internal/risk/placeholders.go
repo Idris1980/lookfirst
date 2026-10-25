@@ -7,8 +7,9 @@ import (
 
 // leftover finds stand-ins that someone was meant to replace, such as
 // "YOUR_IP_ADDRESS" or "<your-subscription-id>". AI assistants write them
-// often, and code that still has them fails, or worse, half works.
-var leftover = regexp.MustCompile(`(?i)["'` + "`" + `]((?:your|my)[_-][a-z0-9_.-]+|<[^<>"'` + "`" + `\n]*\byour\b[^<>"'` + "`" + `\n]*>|replace[_-]?(?:me|this|with[_-][a-z0-9_-]+)|change[_-]?me|insert[_-][a-z0-9_-]+|xxx\.xxx\.xxx\.xxx|0{8}-0{4}-0{4}-0{4}-0{12})["'` + "`" + `]`)
+// often, and code that still has them fails, or worse, half works. Names
+// like "my-vnet" are left alone: they are real names that work as they are.
+var leftover = regexp.MustCompile(`(?i)["'` + "`" + `](your[_-][a-z0-9_.-]+|<[^<>"'` + "`" + `\n]*\byour\b[^<>"'` + "`" + `\n]*>|replace[_-]?(?:me|this|with[_-][a-z0-9_-]+)|change[_-]?me|insert[_-][a-z0-9_-]+|xxx\.xxx\.xxx\.xxx|0{8}-0{4}-0{4}-0{4}-0{12})["'` + "`" + `]`)
 
 // Leftovers returns the placeholders in one line of code, without quotes.
 func Leftovers(line string) []string {
