@@ -296,6 +296,22 @@ function programPath() {
   return 'lookfirst' + exe;
 }
 
+// notFoundMessage says which package to install when the one installed was
+// built for another kind of computer, the easiest mistake to make.
+function notFoundMessage() {
+  const wanted = `${process.platform}-${process.arch}`;
+  let other = '';
+  try {
+    const found = fs.readdirSync(path.join(__dirname, 'bin')).find((f) => f.startsWith('lookfirst-'));
+    if (found) other = found.replace(/^lookfirst-/, '').replace(/\.exe$/, '');
+  } catch { /* no bin folder */ }
+  if (other && other !== wanted) {
+    return `this LookFirst package is for ${other} computers, but yours is ${wanted}. `
+      + `Uninstall it and install lookfirst-${wanted}-….vsix from the releases page instead.`;
+  }
+  return 'the lookfirst program was not found. Reinstall the extension, or set lookFirst.path.';
+}
+
 // runLookFirst runs the lookfirst program directly, without a shell, and
 // returns its JSON report.
 function runLookFirst(args) {
@@ -305,7 +321,7 @@ function runLookFirst(args) {
         if (err) {
           const msg = (stderr || '').replace(/^error:\s*/, '').trim();
           if (err.code === 'ENOENT') {
-            reject(new Error('the lookfirst program was not found. Reinstall the extension, or set lookFirst.path.'));
+            reject(new Error(notFoundMessage()));
           } else {
             reject(new Error(msg || err.message));
           }

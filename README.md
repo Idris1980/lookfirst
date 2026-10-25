@@ -18,10 +18,13 @@ In VS Code, LookFirst checks your files while you work, and can ask an AI to exp
 
    | Your computer | File |
    | --- | --- |
-   | Windows | `lookfirst-win32-x64-….vsix` |
+   | Windows (almost all Windows computers) | `lookfirst-win32-x64-….vsix` |
+   | Windows with an ARM chip, such as Snapdragon | `lookfirst-win32-arm64-….vsix` |
    | Mac with Apple chip (M1 or later) | `lookfirst-darwin-arm64-….vsix` |
    | Mac with Intel chip | `lookfirst-darwin-x64-….vsix` |
    | Linux | `lookfirst-linux-x64-….vsix` |
+
+   Not sure? On Windows, open **Settings → System → About** and look at *System type*: "x64-based processor" means `win32-x64`.
 
 2. In VS Code, open **Extensions** in the left bar (or press `Ctrl+Shift+X`, `Cmd+Shift+X` on a Mac).
 3. Click **…** at the top of the Extensions list and choose **Install from VSIX…**.
