@@ -91,12 +91,15 @@ function answerHTML({ title, fileName, modelName, explanation, code, showHref, a
   const paragraphs = explanation.split(/\n\s*\n/).map((p) => `<p>${escapeHTML(p.trim())}</p>`).join('\n');
   const left = code === null ? [] : findLeftovers(code);
   const warning = left.length === 0 ? '' : `<p class="warning">The suggestion contains ${left.length === 1 ? 'a placeholder' : 'placeholders'} you must fill in yourself: ${left.map((v) => `<code>${escapeHTML(v)}</code>`).join(', ')}. Until you do, the code will not work as intended.</p>`;
+  const masked = code !== null && /«SECRET_\d+»/.test(code)
+    ? '<p class="note">«SECRET_1» and the like stand for the real passwords and keys, which were not sent. Apply puts the real values back, on your computer.</p>'
+    : '';
   const actions = code === null
     ? '<p class="note">The answer did not include fixed code in the expected form, so there is nothing to apply.</p>'
     : `${warning}<p class="actions"><a class="button" href="${escapeHTML(showHref)}" title="Compare your code with the suggested fix, side by side">Show the change</a>
        <a class="button secondary" href="${escapeHTML(applyHref)}" title="Put the suggested fix into ${escapeHTML(fileName)}. You are asked first, and Ctrl+Z undoes it">Apply to ${escapeHTML(fileName)}</a></p>
        <p class="note">Nothing changes in your file until you choose Apply, and you can undo it afterwards. Read the change first: the suggestion comes from an AI model and can be wrong.</p>
-       <h2>Suggested code</h2><pre>${escapeHTML(code)}</pre>`;
+       <h2>Suggested code</h2>${masked}<pre>${escapeHTML(code)}</pre>`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
@@ -165,6 +168,14 @@ function anthropicModel(wanted) {
   return ANTHROPIC_DEFAULT;
 }
 
+// vscodeModelLabel names a VS Code model so people know who answers: Copilot
+// calls the model it picks itself just "Auto".
+function vscodeModelLabel(model) {
+  const vendor = String(model.vendor || '').toLowerCase() === 'copilot' ? 'GitHub Copilot' : String(model.vendor || '');
+  if (/^auto$/i.test(String(model.name).trim())) return vendor ? `${vendor} (it picks the model)` : 'Auto';
+  return vendor ? `${model.name} via ${vendor}` : String(model.name);
+}
+
 // modelLabel turns "claude-opus-5-5" into "Claude Opus 5.5" for people.
 function modelLabel(id) {
   const parts = String(id).split('-');
@@ -183,4 +194,4 @@ function replaceLines(text, start, end, code) {
   return lines.join(eol);
 }
 
-module.exports = { languageName, buildPrompt, parseAnswer, restoreSecrets, escapeHTML, answerHTML, findLeftovers, pickModel, anthropicModel, modelLabel, replaceLines };
+module.exports = { languageName, buildPrompt, parseAnswer, restoreSecrets, escapeHTML, answerHTML, findLeftovers, pickModel, anthropicModel, modelLabel, vscodeModelLabel, replaceLines };

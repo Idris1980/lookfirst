@@ -171,7 +171,7 @@ async function chooseModel() {
   }
   const model = ai.pickModel(models, wanted);
   return {
-    name: model.name,
+    name: ai.vscodeModelLabel(model),
     ask: async (prompt, token) => {
       const response = await model.sendRequest([vscode.LanguageModelChatMessage.User(prompt)], {
         justification: 'LookFirst sends a short piece of code around one problem, with passwords and keys replaced, to explain the problem and suggest a fix.',

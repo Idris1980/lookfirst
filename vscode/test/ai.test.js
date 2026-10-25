@@ -65,6 +65,18 @@ test('pickModel prefers a large model, and the setting wins', () => {
   assert.strictEqual(ai.pickModel([models[0]], '').name, 'GPT-4o mini');
 });
 
+test('vscodeModelLabel says who answers, also for Copilot Auto', () => {
+  assert.strictEqual(ai.vscodeModelLabel({ name: 'Auto', vendor: 'copilot' }), 'GitHub Copilot (it picks the model)');
+  assert.strictEqual(ai.vscodeModelLabel({ name: 'Claude Sonnet 4.5', vendor: 'copilot' }), 'Claude Sonnet 4.5 via GitHub Copilot');
+  assert.strictEqual(ai.vscodeModelLabel({ name: 'Local', vendor: '' }), 'Local');
+});
+
+test('answerHTML explains masked secrets in the suggested code', () => {
+  const args = { title: 'T', fileName: 'f.yml', modelName: 'm', explanation: 'e', showHref: 'a', applyHref: 'b' };
+  assert.match(ai.answerHTML({ ...args, code: 'PASSWORD: «SECRET_1»' }), /Apply puts the real values back/);
+  assert.doesNotMatch(ai.answerHTML({ ...args, code: 'PASSWORD: ${PW}' }), /Apply puts the real values back/);
+});
+
 test('findLeftovers finds placeholders an AI left in a fix, not advice in comments', () => {
   const code = '  # Replace with your actual IP address\n  source_address_prefix = "YOUR_IP_ADDRESS"\n  tenant = "<your-tenant-id>"\n  name = "nsg-demo"';
   assert.deepStrictEqual(ai.findLeftovers(code), ['YOUR_IP_ADDRESS', '<your-tenant-id>']);
