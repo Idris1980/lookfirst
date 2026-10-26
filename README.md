@@ -47,7 +47,7 @@ Next to each problem in the picture, and in the light bulb on each squiggle, the
 4. The answer explains the problem in plain language and suggests a fix, shown next to your code so you can compare.
 5. Your file is changed only if you choose **Apply**. The real passwords are put back in at that moment, on your computer.
 
-It uses the AI you already have in VS Code, such as GitHub Copilot; **Copilot Free** is enough and costs nothing. If you have an Anthropic API key, you can use Claude through it instead (billed by Anthropic). The details are in the [extension's guide](vscode/README.md).
+It uses the AI you already have in VS Code, such as GitHub Copilot; **Copilot Free** is enough and costs nothing. If you have a Claude plan and Claude Code, LookFirst can ask Claude through it instead, covered by your plan. Or use your own Anthropic API key (billed by Anthropic). The details are in the [extension's guide](vscode/README.md).
 
 ## What it looks for
 

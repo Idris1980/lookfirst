@@ -77,6 +77,14 @@ func TestFromAnywhere(t *testing.T) {
 	}
 }
 
+func TestIconNamesAreNotSecrets(t *testing.T) {
+	for _, n := range []string{"passwordCheck", "token_icon", "secretSvg"} {
+		if SecretName(n) {
+			t.Errorf("SecretName(%q) = true", n)
+		}
+	}
+}
+
 func TestFallbackPassword(t *testing.T) {
 	g := &model.Graph{}
 	CheckSecret(g, "", "MYSQL_PASSWORD", "${WP_DB_PASSWORD:-change-me-wp}", "f", 1, "fix")

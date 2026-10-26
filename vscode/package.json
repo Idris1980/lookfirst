@@ -144,18 +144,25 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Which AI model to ask, by part of its name, for example `gpt-4.1` or `claude`. Empty means the largest model available, avoiding small ones such as \"mini\". With the Anthropic provider: `opus` (the default), `sonnet`, `haiku`, `fable`, or an exact model id such as `claude-sonnet-5-5`. Can only be set in your own user settings, never by a workspace."
+          "markdownDescription": "Which AI model to ask, by part of its name, for example `gpt-4.1` or `claude`. Empty means the largest model available, avoiding small ones such as \"mini\". With the Anthropic provider: `opus` (the default), `sonnet`, `haiku`, `fable`, or an exact model id such as `claude-sonnet-5-5`. With Claude Code: the same names, or empty for your plan's default. Can only be set in your own user settings, never by a workspace."
         },
         "lookFirst.ai.provider": {
           "type": "string",
-          "enum": ["vscode", "anthropic"],
+          "enum": ["vscode", "claude-code", "anthropic"],
           "enumDescriptions": [
             "The AI model in VS Code, for example GitHub Copilot (Copilot Free works).",
+            "Claude through the Claude Code program you are signed in to, covered by your Claude plan (Pro or Max). No API key. It is started without tools or customizations, so it can only answer.",
             "Claude through the Anthropic API with your own API key, billed to your Anthropic account. The key is stored encrypted on this computer."
           ],
           "default": "vscode",
           "scope": "machine",
           "description": "Where LookFirst sends the request when you ask the AI to explain a problem. Can only be set in your own user settings, never by a workspace."
+        },
+        "lookFirst.ai.claudePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Full path to the Claude Code program (claude) for the claude-code provider. Empty means the one on PATH, or the one that comes with the Claude Code extension. Can only be set in your own user settings, never by a workspace."
         }
       }
     }

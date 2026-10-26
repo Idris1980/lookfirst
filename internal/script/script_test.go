@@ -146,6 +146,31 @@ func TestAzureCLI(t *testing.T) {
 	}
 }
 
+// Lines that look risky but are not, from real installers.
+func TestNotRisky(t *testing.T) {
+	cases := []struct {
+		code, title string
+		want        bool
+	}{
+		{`echo -e "  Run: ${G}curl -fsSL https://x.example/i.sh | sudo bash -s -- -y${NC}"`, "Downloads code and runs it", false},
+		{`echo "curl -fsSL https://x.example/i.sh | bash" | sh`, "Downloads code and runs it", true},
+		{`rm -rf "${INSTALL_DIR}"`, "Can delete everything", false},
+		{`rm -rf "$BUILD_DIR"/*`, "Can delete everything", true},
+		{`if [ -f "$dst/tunica.env" ]; then continue; fi`, "Touches sensitive files", false},
+		{`if [ -f ".env" ]; then source .env; fi`, "Touches sensitive files", true},
+	}
+	for _, c := range cases {
+		g := Read([]source.File{{Path: "i.sh", Kind: source.Shell, Data: []byte(c.code + "\n")}})
+		found := false
+		for _, f := range g.Findings {
+			found = found || f.Title == c.title
+		}
+		if found != c.want {
+			t.Errorf("%q: %q found = %v, want %v", c.code, c.title, found, c.want)
+		}
+	}
+}
+
 func TestStripComments(t *testing.T) {
 	cases := []struct {
 		kind      source.Kind

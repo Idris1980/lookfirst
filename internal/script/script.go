@@ -245,6 +245,9 @@ var dynamicCode = map[source.Kind]*regexp.Regexp{
 func (s *scan) downloadAndRun() {
 	for _, d := range downloadRun {
 		s.each(d.re, func(l line, _ []string) {
+			if s.printedOnly(l.code) {
+				return // a tip printed for the reader, not a command
+			}
 			s.add(model.High, "Downloads code and runs it",
 				fmt.Sprintf("This line %s. Whoever controls that address decides what runs on your machine, and it can change at any time. Download the file, read it, then run it.", d.what), l.n)
 		})
@@ -262,6 +265,20 @@ func (s *scan) downloadAndRun() {
 				"eval/exec turns text into code at run time. If any of that text comes from a user, a file or the network, an attacker can run anything.", l.n)
 		})
 	}
+}
+
+var (
+	printCommand = regexp.MustCompile(`^\s*(echo|printf|Write-Host|Write-Output)\b`)
+	quoted       = regexp.MustCompile(`"(?:[^"\\]|\\.)*"|'[^']*'`)
+)
+
+// printedOnly reports whether a shell line only prints text, such as
+// echo "run: curl … | bash", without passing the text on to anything.
+func (s *scan) printedOnly(code string) bool {
+	if (s.f.Kind != source.Shell && s.f.Kind != source.PowerShell) || !printCommand.MatchString(code) {
+		return false
+	}
+	return !strings.Contains(quoted.ReplaceAllString(code, `""`), "|")
 }
 
 // savedTo finds a download written to a file: curl -o name, wget -O name.
@@ -456,13 +473,16 @@ var sensitiveFiles = []struct {
 	{regexp.MustCompile(`/etc/shadow|/etc/passwd|/etc/sudoers`), "the system's user and password files"},
 	{regexp.MustCompile(`(?i)Login Data|Cookies|Local State|Web Data|logins\.json|key4\.db|cookies\.sqlite`), "saved browser passwords or cookies"},
 	{regexp.MustCompile(`(?i)wallet\.dat|Exodus|Electrum|MetaMask|keystore[/\\]UTC--`), "a cryptocurrency wallet"},
-	{regexp.MustCompile(`(?i)\.env['"]|['"]\.env\b`), "your .env file with secrets"},
+	// A file named .env (or .env.local …), not a config file such as tool.env.
+	{regexp.MustCompile(`(?i)(^|[\s'"/\\=(])\.env(\.[\w-]+)?\b`), "your .env file with secrets"},
 	{regexp.MustCompile(`(?i)Microsoft[/\\]Credentials|Windows[/\\]Vault|\bvaultcmd\b`), "Windows saved credentials"},
 	{regexp.MustCompile(`(?i)\bkeychain\b|security\s+find-generic-password`), "the macOS keychain"},
 }
 
 var (
-	deleteDangerous = regexp.MustCompile(`\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f?|-[a-zA-Z]*f[a-zA-Z]*r)[a-zA-Z]*\s+(--no-preserve-root\s+)?("?(/|~|\$HOME|\$\{HOME\})"?/?\*?(\s|$)|"?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"?/?\*?(\s|$))`)
+	// A variable counts only with a slash after it: "$DIR"/* becomes /* when
+	// DIR is empty, while "$DIR" alone then deletes nothing.
+	deleteDangerous = regexp.MustCompile(`\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f?|-[a-zA-Z]*f[a-zA-Z]*r)[a-zA-Z]*\s+(--no-preserve-root\s+)?("?(/|~|\$HOME|\$\{HOME\})"?/?\*?(\s|$)|"?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?"?/\*?(\s|$))`)
 	deleteAny       = regexp.MustCompile(`\brm\s+-[a-zA-Z]*r|shutil\.rmtree\(|os\.(remove|unlink|rmdir)\(|\.unlink\(|fs\.(rm|rmSync|unlink|unlinkSync|rmdir|rmdirSync)\(|(?i)Remove-Item\b.*-Recurse|\bdel\s+/[sq]|\brmdir\s+/s|\bformat\s+[a-z]:`)
 	persistence     = []struct {
 		re   *regexp.Regexp

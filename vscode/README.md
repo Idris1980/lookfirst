@@ -32,6 +32,8 @@ AI answers can be wrong. Read the change before you apply it.
 
 By default LookFirst uses the AI model you already have in VS Code, such as GitHub Copilot (Copilot Free works), and picks the largest one available. Choose another with `lookFirst.ai.model`.
 
+If you have a Claude plan (Pro or Max) and the Claude Code program, set `lookFirst.ai.provider` to `claude-code`. LookFirst then asks Claude through Claude Code, which you are already signed in to, so it is covered by your plan and needs no API key. Claude Code can read files and run commands, so LookFirst starts it without any tools or customizations, in an empty folder of its own: it can only answer the question. The answer shows how many tokens it used.
+
 If you would rather use Claude directly, set `lookFirst.ai.provider` to `anthropic`. The first time, LookFirst asks for an API key from [console.anthropic.com](https://console.anthropic.com/). The key is stored encrypted in VS Code's secret storage, never in settings or files, and is only sent to Anthropic; remove it any time with **LookFirst: Remove Anthropic API Key**. It uses Claude Opus 5.5 unless you set `lookFirst.ai.model` to `sonnet`, `haiku`, `fable` or an exact model id. Use is billed to your Anthropic account, separately from a Claude Pro or Max subscription, which other programs cannot use. Everything else is the same: the masking, the preview before each request, and Apply.
 
 ## What it reads
