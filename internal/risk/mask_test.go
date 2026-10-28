@@ -48,6 +48,14 @@ func TestMask(t *testing.T) {
 			secrets: 1,
 		},
 		{
+			// CloudFormation: a parameter's default two lines below its name,
+			// and a !Ref to it, which is not a secret.
+			in:      "Parameters:\n  DBPassword:\n    Type: String\n    Default: Sup3rS3cret2026\nResources:\n  Db:\n    Properties:\n      MasterUserPassword: !Ref DBPassword",
+			gone:    []string{"Sup3rS3cret2026"},
+			kept:    []string{"DBPassword", "!Ref DBPassword", "Type: String"},
+			secrets: 1,
+		},
+		{
 			// References and placeholders are not secrets and must stay, so
 			// the model can see how the code gets its values.
 			in:      "admin_password = var.admin_password\nPOSTGRES_PASSWORD: ${POSTGRES_PASSWORD}\napi_key = os.environ[\"API_KEY\"]\npassword_min_length = 16",

@@ -1,0 +1,59 @@
+# CloudFormation written the careful way: it must give no high or medium findings.
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  DBPassword:
+    Type: String
+    NoEcho: true
+  AdminCidr:
+    Type: String
+
+Resources:
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: HTTPS from anywhere, SSH from the admin network only
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AdminCidr
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: postgres
+      DBInstanceClass: db.t3.micro
+      MasterUsername: app
+      MasterUserPassword: "{{resolve:secretsmanager:prod/db:SecretString:password}}"
+      PubliclyAccessible: false
+      StorageEncrypted: true
+
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ReadRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: read-bucket
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: [s3:GetObject]
+                Resource: !Sub "${Bucket.Arn}/*"

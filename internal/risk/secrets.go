@@ -10,7 +10,7 @@ import (
 
 var (
 	secretName  = regexp.MustCompile(`(?i)(password|passwd|pwd|secret|token|api_?key|apikey|access_?key|private_?key|connection_?string|client_?secret|(^|_)sas(_|$))`)
-	notSecret   = regexp.MustCompile(`(?i)(public|[_-]?(id|ids|name|names|type|version|length|enabled|count|uri|url|path|file|header|limit|ttl|env|setting|settings|ref|reference|location|hint|label|prompt|message|msg|text|description|desc|placeholder|pattern|regex|format|field|column|param|input|mode|strength|policy|required|hash|algorithm|algo|check|icon|svg|glyph)$|[_-]?policy|[_-]?expir|[_-]?rotation|_min|_max|^next_?token)`)
+	notSecret   = regexp.MustCompile(`(?i)(public|[_-]?(id|ids|name|names|type|version|length|enabled|count|uri|url|path|file|header|limit|ttl|env|setting|settings|ref|reference|location|hint|label|prompt|message|msg|text|description|desc|placeholder|pattern|regex|format|field|column|param|input|mode|strength|policy|required|hash|algorithm|algo|check|icon|svg|glyph|arn|template|units|validity)$|[_-]?policy|[_-]?expir|[_-]?rotation|_min|_max|^next_?token)`)
 	secretValue = []struct {
 		re   *regexp.Regexp
 		what string

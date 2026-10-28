@@ -43,15 +43,18 @@ func Mask(text string) (string, map[string]string) {
 	}, m.token)
 	text = replaceGroup(text, bareAssign, 2, func(sub []string) bool {
 		v := sub[2]
+		// "!Ref DBPassword" in CloudFormation points at a parameter.
 		return SecretName(sub[1]) && !Placeholder(v) && !masked(v) && !reference.MatchString(v) &&
-			!strings.HasPrefix(v, "$") && !strings.ContainsAny(v, "[({")
+			!strings.HasPrefix(v, "$") && !strings.HasPrefix(v, "!") && !strings.ContainsAny(v, "[({")
 	}, m.token)
 	return maskNamedValues(text, m), m.originals
 }
 
 var (
 	// A secret's name on one line ...
-	secretLabel = regexp.MustCompile(`(?i)(?:variable\s+"([^"]+)"|\bparam\s+(\w+)|["']?name["']?\s*[:=]\s*["']?([A-Za-z_][\w.-]*))`)
+	// The last form is a YAML or JSON key that opens a block, such as a
+	// CloudFormation parameter "DBPassword:" with "Default: …" below it.
+	secretLabel = regexp.MustCompile(`(?i)(?:variable\s+"([^"]+)"|\bparam\s+(\w+)|["']?name["']?\s*[:=]\s*["']?([A-Za-z_][\w.-]*)|^\s*["']?([A-Za-z_][\w.-]*)["']?\s*:\s*\{?\s*$)`)
 	// ... and its value on one of the next lines: Terraform "default",
 	// Kubernetes and ARM "value", ARM "defaultValue".
 	namedValue = regexp.MustCompile(`(?i)\b["']?(default|value|defaultValue)["']?\s*[:=]\s*["']?([^"'\s,}]+)`)
@@ -66,7 +69,7 @@ func maskNamedValues(text string, m *masker) string {
 		// Each new name starts over: only a secret's own value is masked.
 		if sub := secretLabel.FindStringSubmatch(l); sub != nil {
 			pending = 0
-			if SecretName(sub[1] + sub[2] + sub[3]) {
+			if SecretName(sub[1] + sub[2] + sub[3] + sub[4]) {
 				pending = 4
 			}
 		}

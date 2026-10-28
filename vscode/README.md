@@ -38,7 +38,7 @@ If you would rather use Claude directly, set `lookFirst.ai.provider` to `anthrop
 
 ## What it reads
 
-Terraform, Bicep and ARM templates, docker-compose, Kubernetes manifests, Dockerfiles, Python, JavaScript and TypeScript, shell scripts, PowerShell, package.json and requirements.txt. A folder with several projects gets one picture per project, the riskiest first.
+Terraform, Bicep and ARM templates, AWS CloudFormation and SAM templates, docker-compose, Kubernetes manifests, Dockerfiles, Python, JavaScript and TypeScript, shell scripts, PowerShell, package.json and requirements.txt. A folder with several projects gets one picture per project, the riskiest first.
 
 ## Safe by design
 

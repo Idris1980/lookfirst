@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Idris1980/lookfirst/internal/arm"
+	"github.com/Idris1980/lookfirst/internal/cloudformation"
 	"github.com/Idris1980/lookfirst/internal/compose"
 	"github.com/Idris1980/lookfirst/internal/kubernetes"
 	"github.com/Idris1980/lookfirst/internal/model"
@@ -52,7 +53,7 @@ func Paths(paths []string) ([]Project, error) {
 }
 
 // ErrNothing means none of the files is a kind LookFirst can read.
-var ErrNothing = fmt.Errorf("found nothing we can read. Supported: Terraform, Bicep, ARM, docker-compose, Kubernetes, Dockerfile, Python, JavaScript/TypeScript, shell, PowerShell, package.json and requirements.txt")
+var ErrNothing = fmt.Errorf("found nothing we can read. Supported: Terraform, Bicep, ARM, CloudFormation, docker-compose, Kubernetes, Dockerfile, Python, JavaScript/TypeScript, shell, PowerShell, package.json and requirements.txt")
 
 // Group reads files that are already in memory, one project per folder.
 // The web page uses it for files the visitor opens or pastes.
@@ -93,6 +94,9 @@ func Files(files []source.File) *model.Graph {
 	}
 	if fs := append(byKind[source.ARM], byKind[source.Bicep]...); len(fs) > 0 {
 		g.Merge(arm.Read(fs))
+	}
+	if fs := byKind[source.CloudFormation]; len(fs) > 0 {
+		g.Merge(cloudformation.Read(fs))
 	}
 	if fs := byKind[source.Compose]; len(fs) > 0 {
 		g.Merge(compose.Read(fs))

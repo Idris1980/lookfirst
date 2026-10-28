@@ -16,7 +16,7 @@ node --test "vscode/test/*.test.js"
 
 - `cmd/lookfirst` – the command-line program; `cmd/wasm` – the reader for the web page
 - `internal/source` – finds files and decides what kind of code each one is
-- `internal/terraform`, `arm`, `compose`, `kubernetes`, `script` – one reader per kind of code
+- `internal/terraform`, `arm`, `cloudformation`, `compose`, `kubernetes`, `script` – one reader per kind of code
 - `internal/risk` – rules shared by all readers: ports, secrets, placeholders, masking
 - `internal/analyze` – runs the readers and groups the results per folder
 - `internal/render` – the report (HTML), text, JSON, Markdown and GitHub output

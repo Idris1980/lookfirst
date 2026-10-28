@@ -63,7 +63,7 @@ It uses the AI you already have in VS Code, such as GitHub Copilot; **Copilot Fr
 - Placeholders someone forgot to fill in, such as `"YOUR_IP_ADDRESS"`
 - Syntax errors
 
-It reads Terraform, Bicep and ARM templates, docker-compose, Kubernetes, Python, JavaScript and TypeScript, shell scripts, PowerShell, Dockerfiles, `package.json` and `requirements.txt`.
+It reads Terraform, Bicep and ARM templates, AWS CloudFormation and SAM templates, docker-compose, Kubernetes, Python, JavaScript and TypeScript, shell scripts, PowerShell, Dockerfiles, `package.json` and `requirements.txt`.
 
 ## Is it safe to use?
 

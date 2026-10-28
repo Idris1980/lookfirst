@@ -16,16 +16,18 @@ import (
 type Kind string
 
 const (
-	Terraform  Kind = "terraform"
-	Bicep      Kind = "bicep"
-	ARM        Kind = "arm"
-	Compose    Kind = "compose"
-	Kubernetes Kind = "kubernetes"
-	Python     Kind = "python"
-	JavaScript Kind = "javascript"
-	Shell      Kind = "shell"
-	PowerShell Kind = "powershell"
-	Dockerfile Kind = "dockerfile"
+	Terraform Kind = "terraform"
+	Bicep     Kind = "bicep"
+	ARM       Kind = "arm"
+	// AWS CloudFormation templates, including SAM, in YAML or JSON.
+	CloudFormation Kind = "cloudformation"
+	Compose        Kind = "compose"
+	Kubernetes     Kind = "kubernetes"
+	Python         Kind = "python"
+	JavaScript     Kind = "javascript"
+	Shell          Kind = "shell"
+	PowerShell     Kind = "powershell"
+	Dockerfile     Kind = "dockerfile"
 	// Package lists: what a program would install.
 	NpmManifest     Kind = "package.json"
 	PipRequirements Kind = "requirements"
@@ -149,6 +151,8 @@ func Detect(path string, data []byte) Kind {
 	switch k {
 	case "yaml":
 		switch {
+		case cloudFormation(data):
+			return CloudFormation
 		case composeName.MatchString(strings.ToLower(name)) || topLevelServices.Match(data):
 			return Compose
 		case apiVersion.Match(data) && kindLine.Match(data):
@@ -158,6 +162,9 @@ func Detect(path string, data []byte) Kind {
 	case "json":
 		if bytes.Contains(data, []byte("deploymentTemplate.json")) {
 			return ARM
+		}
+		if cloudFormation(data) {
+			return CloudFormation
 		}
 		return ""
 	case "":
@@ -182,7 +189,16 @@ var (
 	topLevelServices = regexp.MustCompile(`(?m)^services:\s*$`)
 	apiVersion       = regexp.MustCompile(`(?m)^apiVersion:\s*\S`)
 	kindLine         = regexp.MustCompile(`(?m)^kind:\s*\S`)
+	cfnVersion       = regexp.MustCompile(`"?AWSTemplateFormatVersion"?\s*:`)
+	cfnResources     = regexp.MustCompile(`(?m)^\s*"?Resources"?\s*:`)
+	cfnType          = regexp.MustCompile(`"?Type"?\s*:\s*["']?AWS::\w+::\w+`)
 )
+
+// cloudFormation recognises a CloudFormation or SAM template: it says so,
+// or it has Resources with AWS:: types.
+func cloudFormation(data []byte) bool {
+	return cfnVersion.Match(data) || (cfnResources.Match(data) && cfnType.Match(data))
+}
 
 func guessByName(name string) Kind {
 	lower := strings.ToLower(name)
@@ -229,6 +245,11 @@ func GuessName(text string) string {
 	switch {
 	case strings.Contains(t, "deploymentTemplate.json"):
 		return "azuredeploy.json"
+	case cloudFormation([]byte(t)):
+		if strings.HasPrefix(t, "{") {
+			return "template.json"
+		}
+		return "template.yaml"
 	case has(`(?m)^\s*"(dependencies|devDependencies|scripts)"\s*:`) && strings.HasPrefix(t, "{"):
 		return "package.json"
 	case has(`(?m)^(resource|variable|provider|module|terraform|data|output|locals)\s+("|\{)`):

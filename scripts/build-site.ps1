@@ -37,6 +37,7 @@ $titles = [ordered]@{
   'azure-vm'         = 'Azure Linux VM'
   'azure-webapp-sql' = 'Azure web app with SQL'
   'aws-ec2'          = 'AWS server, database and bucket'
+  'cloudformation'   = 'AWS CloudFormation template'
   'compose'          = 'docker-compose app'
   'kubernetes'       = 'Kubernetes deployment'
   'node-api'         = 'Node.js API'
