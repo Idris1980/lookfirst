@@ -539,7 +539,7 @@ var (
 	ipPermission = regexp.MustCompile(`IpProtocol=([\w-]+)(?:,FromPort=(-?\d+))?(?:,ToPort=(-?\d+))?[^ ]*?CidrIpv?6?=([0-9a-fA-F.:/]+)`)
 	// Policies that give full control of the whole AWS account.
 	adminPolicy = regexp.MustCompile(`arn:aws:iam::aws:policy/(AdministratorAccess|PowerUserAccess|IAMFullAccess)\b`)
-	actionAll   = regexp.MustCompile(`"Action"\s*:\s*\[?\s*"\*"|Action=\*|"Action"\s*:\s*\[?\s*"iam:\*"`)
+	actionAll   = regexp.MustCompile(`["']Action["']\s*:\s*\[?\s*["'](\*|iam:\*)["']|Action=\*`)
 )
 
 // awsWhat says how to draw what an aws command creates, if it creates
@@ -597,10 +597,15 @@ var anyNameFlag = regexp.MustCompile(`(?:^|\s)--([a-z-]*-)?name(?:\s+|=)("[^"]*"
 // hang together through the variables that hold their ids, and checks what
 // they open to the internet.
 func (s *scan) awsCLI() {
-	if s.f.Kind != source.Shell && s.f.Kind != source.PowerShell {
+	var lines []line
+	switch s.f.Kind {
+	case source.Shell, source.PowerShell:
+		lines = s.logicalLines()
+	case source.Python:
+		lines = s.boto3Lines()
+	default:
 		return
 	}
-	lines := s.logicalLines()
 
 	// Names given afterwards with create-tags, by the variable holding the id.
 	tagged := map[string]string{}
@@ -719,7 +724,16 @@ func (s *scan) awsCLI() {
 					s.g.Connect(from, target, "port "+spec, false)
 				}
 			}
-			if cidr, _ := azFlag(args, "--cidr"); risk.FromAnywhere([]string{cidr}) {
+			// boto3 writes the short form as CidrIp, FromPort and ToPort.
+			if spec == "?" {
+				if from, ok := azFlag(args, "--from-port"); ok {
+					spec = from
+					if to, _ := azFlag(args, "--to-port"); to != "" && to != from {
+						spec = from + "-" + to
+					}
+				}
+			}
+			if cidr, _ := azFlag(args, "--cidr", "--cidr-ip"); risk.FromAnywhere([]string{cidr}) {
 				risk.OpenPorts(s.g, target, []string{spec}, s.f.Path, l.n)
 			}
 			// The long form: --ip-permissions IpProtocol=…,FromPort=…,ToPort=…,IpRanges=[{CidrIp=…}].

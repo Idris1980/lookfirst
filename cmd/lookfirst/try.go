@@ -40,22 +40,48 @@ func try(args []string) error {
 	params := fs.String("parameters", "", "a parameters file for the template")
 	out := fs.String("out", "lookfirst-try.html", "where to write the report")
 	fromWhatIf := fs.String("from-whatif", "", "compare with a saved answer from 'az deployment group what-if --no-pretty-print' instead of asking Azure")
+	region := fs.String("region", "", "AWS region for a CloudFormation template (default: the one aws is set to)")
+	fromChangeSet := fs.String("from-changeset", "", "compare with a saved answer from 'aws cloudformation describe-change-set --include-property-values' instead of asking AWS")
 	fs.Parse(args)
 
 	az := azCLI{subscription: *subscription}
+	aws := awsCLI{region: *region}
 	if *cleanup {
-		return az.cleanup()
+		ran := false
+		if _, err := exec.LookPath("az"); err == nil {
+			ran = true
+			if err := az.cleanup(); err != nil {
+				fmt.Println("Azure:", err)
+			}
+		}
+		if _, err := exec.LookPath("aws"); err == nil {
+			ran = true
+			if err := aws.cleanup(); err != nil {
+				fmt.Println("AWS:", err)
+			}
+		}
+		if !ran {
+			return fmt.Errorf("neither the Azure CLI (az) nor the AWS CLI (aws) was found")
+		}
+		return nil
 	}
 	if fs.NArg() != 1 {
-		return fmt.Errorf("give one Bicep or ARM template, for example: lookfirst try main.bicep")
+		return fmt.Errorf("give one Bicep, ARM or CloudFormation template, for example: lookfirst try main.bicep")
 	}
 	file := fs.Arg(0)
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return err
 	}
-	if k := source.Detect(file, data); k != source.Bicep && k != source.ARM {
-		return fmt.Errorf("%s is not a Bicep or ARM template; try only works with those for now", file)
+	switch source.Detect(file, data) {
+	case source.Bicep, source.ARM:
+	case source.CloudFormation:
+		if *deploy {
+			return fmt.Errorf("--deploy works for Azure only for now; for CloudFormation, try shows CloudFormation's free preview")
+		}
+		return tryAWS(aws, file, *params, *fromChangeSet, *keep, *out)
+	default:
+		return fmt.Errorf("%s is not a Bicep, ARM or CloudFormation template; try only works with those for now", file)
 	}
 
 	// 1. The code, as LookFirst reads it.
@@ -74,7 +100,7 @@ func try(args []string) error {
 		if err != nil {
 			return err
 		}
-		return tryReport(code, resources, "Azure's preview (saved)", file, *out)
+		return tryAzureReport(code, resources, "Azure's preview (saved)", file, *out)
 	}
 
 	// 2. Where it would go.
@@ -161,24 +187,29 @@ func try(args []string) error {
 		label = "Built in Azure"
 	}
 
-	return tryReport(code, resources, label, file, *out)
+	return tryAzureReport(code, resources, label, file, *out)
 }
 
-// tryReport reads Azure's answer with the same rules as the code, compares
-// the two and writes the report.
-func tryReport(code *model.Graph, resources []azuretry.Resource, label, file, out string) error {
+// tryAzureReport reads Azure's answer with the same rules as the code.
+func tryAzureReport(code *model.Graph, resources []azuretry.Resource, label, file, out string) error {
 	built, err := azuretry.Template(resources)
 	if err != nil {
 		return err
 	}
 	azure := arm.Read([]source.File{{Path: label, Kind: source.ARM, Data: built}})
-	azure.Sort()
-	diff := azuretry.Compare(code, azure, label)
+	return tryReport("Azure", code, azure, label, file, out)
+}
+
+// tryReport compares the code with the cloud's answer, already read with
+// the same rules, and writes the report.
+func tryReport(cloud string, code, answer *model.Graph, label, file, out string) error {
+	answer.Sort()
+	diff := azuretry.CompareIn(cloud, code, answer, label)
 
 	sections := []render.Section{
-		{Name: "What Azure adds to the picture", Graph: diff},
+		{Name: "What " + cloud + " adds to the picture", Graph: diff},
 		{Name: "From the code: " + filepath.Base(file), Graph: code},
-		{Name: label, Graph: azure},
+		{Name: label, Graph: answer},
 	}
 	render.Text(os.Stdout, sections[:1])
 	f, err := os.Create(out)
@@ -188,7 +219,7 @@ func tryReport(code *model.Graph, resources []azuretry.Resource, label, file, ou
 	defer f.Close()
 	overview := []string{
 		"LookFirst read the template, then compared it with " + label + ".",
-		"The first part shows what Azure adds: resources and risks that are not in the code but would be in Azure, for example because of Azure's own defaults. The other two parts show the code and Azure on their own.",
+		"The first part shows what " + cloud + " adds: resources and risks that are not in the code but would be in " + cloud + ", for example because of its own defaults, filled-in parameters or transforms. The other two parts show the code and " + cloud + " on their own.",
 	}
 	if err := render.HTML(f, sections, render.Options{Overview: overview}); err != nil {
 		return err

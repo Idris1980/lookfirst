@@ -29,11 +29,11 @@ func check(c *config, g *model.Graph) {
 		case "aws_security_group":
 			for _, b := range r.body.Blocks {
 				if b.Type == "ingress" {
-					awsRule(g, r, b.Body, b.DefRange().Start.Line, "cidr_blocks", "ipv6_cidr_blocks", "protocol")
+					awsRule(g, r.id(), r.file, b.Body, b.DefRange().Start.Line, "cidr_blocks", "ipv6_cidr_blocks", "protocol")
 				}
 			}
 		case "aws_vpc_security_group_ingress_rule":
-			awsRule(g, r, r.body, r.line, "cidr_ipv4", "cidr_ipv6", "ip_protocol")
+			awsRule(g, r.id(), r.file, r.body, r.line, "cidr_ipv4", "cidr_ipv6", "ip_protocol")
 
 		case "azurerm_public_ip", "aws_eip":
 			g.Expose(r.id(), "", false)
@@ -113,6 +113,7 @@ func check(c *config, g *model.Graph) {
 		}
 	}
 
+	awsChecks(c, g)
 	secrets(c, g)
 }
 
@@ -132,7 +133,7 @@ func azureRule(g *model.Graph, r resource, body *hclsyntax.Body, fallback int) {
 	risk.OpenPorts(g, r.id(), ports, r.file, line(body, "source_address_prefix", fallback))
 }
 
-func awsRule(g *model.Graph, r resource, body *hclsyntax.Body, fallback int, v4, v6, proto string) {
+func awsRule(g *model.Graph, node, file string, body *hclsyntax.Body, fallback int, v4, v6, proto string) {
 	if !risk.FromAnywhere(strs(body, v4, v6)) {
 		return
 	}
@@ -149,7 +150,7 @@ func awsRule(g *model.Graph, r resource, body *hclsyntax.Body, fallback int, v4,
 	default:
 		spec = from + "-" + to
 	}
-	risk.OpenPorts(g, r.id(), []string{spec}, r.file, line(body, v4, fallback))
+	risk.OpenPorts(g, node, []string{spec}, file, line(body, v4, fallback))
 }
 
 // secrets looks for passwords and keys written straight into the code.

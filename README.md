@@ -86,7 +86,7 @@ LookFirst also works outside VS Code:
 
 - [On the command line](docs/command-line.md): one program for Windows, macOS and Linux, for scripts and build pipelines
 - [On GitHub](docs/github-action.md): checks every pull request and marks the problems on the changed lines
-- [Comparing a template with Azure](docs/compare-with-azure.md): asks Azure what a Bicep or ARM template would really build
+- [Comparing a template with Azure or AWS](docs/compare-with-azure.md): asks the cloud what a Bicep, ARM or CloudFormation template would really build
 - [Developing LookFirst](docs/development.md): building, testing and how the code is organised
 
 ## License

@@ -233,6 +233,68 @@ func TestAWSCLI(t *testing.T) {
 	}
 }
 
+// boto3: the same AWS rules as the command line, from Python calls that
+// span several lines.
+func TestBoto3(t *testing.T) {
+	py := `import boto3, json
+ec2 = boto3.client("ec2", region_name="eu-north-1")
+rds = boto3.client('rds')
+iam = boto3.client("iam")
+
+vpc = ec2.create_vpc(CidrBlock="10.0.0.0/16")
+sg = ec2.create_security_group(GroupName="web-sg", Description="web", VpcId=vpc["Vpc"]["VpcId"])
+ec2.authorize_security_group_ingress(
+    GroupId=sg["GroupId"],
+    IpPermissions=[
+        {"IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "IpRanges": [{"CidrIp": "0.0.0.0/0"}]},
+        {"IpProtocol": "tcp", "FromPort": 443, "ToPort": 443, "IpRanges": [{"CidrIp": "10.0.0.0/8"}]},
+    ],
+)
+server = ec2.run_instances(ImageId="ami-1", MinCount=1, MaxCount=1,
+    TagSpecifications=[{"ResourceType": "instance", "Tags": [{"Key": "Name", "Value": "web"}]}])
+rds.create_db_instance(DBInstanceIdentifier="shop", Engine="mysql", PubliclyAccessible=True)
+iam.attach_role_policy(RoleName="app", PolicyArn="arn:aws:iam::aws:policy/AdministratorAccess")
+iam.put_role_policy(RoleName="app", PolicyName="all",
+    PolicyDocument=json.dumps({"Statement": [{"Effect": "Allow", "Action": "*", "Resource": "*"}]}))
+`
+	g := Read([]source.File{{Path: "setup.py", Kind: source.Python, Data: []byte(py)}})
+	got := map[string][]int{}
+	for _, f := range g.Findings {
+		got[f.Title] = append(got[f.Title], f.Line)
+	}
+	want := map[string][]int{
+		"SSH (port 22) is open to the internet": {8},
+		"Database reachable from the internet":  {17},
+		"Full control of the AWS account":       {18},
+		"Permission to do everything":           {19},
+	}
+	for title, lines := range want {
+		if !reflect.DeepEqual(got[title], lines) {
+			t.Errorf("%q on lines %v, want %v (all: %v)", title, got[title], lines, got)
+		}
+	}
+	for _, id := range []string{"aws.network.$vpc", "aws.shield.web-sg", "aws.vm.web", "aws.database.shop"} {
+		if g.Node(id) == nil {
+			t.Errorf("the picture is missing %q", id)
+		}
+	}
+	linked := false
+	for _, e := range g.Edges {
+		linked = linked || (e.From == "aws.shield.web-sg" && e.To == "aws.network.$vpc")
+	}
+	if !linked {
+		t.Errorf("no line from the security group to its VPC: %v", g.Edges)
+	}
+}
+
+func TestKebab(t *testing.T) {
+	for in, want := range map[string]string{"PubliclyAccessible": "publicly-accessible", "DBInstanceIdentifier": "db-instance-identifier", "CidrIp": "cidr-ip", "ACL": "acl"} {
+		if got := kebab(in); got != want {
+			t.Errorf("kebab(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestStripComments(t *testing.T) {
 	cases := []struct {
 		kind      source.Kind

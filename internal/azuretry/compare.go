@@ -14,6 +14,12 @@ import (
 // for example because a policy or a default changed them. The result is a
 // graph of its own, so it can be shown next to the other two.
 func Compare(code, azure *model.Graph, label string) *model.Graph {
+	return CompareIn("Azure", code, azure, label)
+}
+
+// CompareIn is Compare for any cloud: cloud names it in the findings, such
+// as "AWS". The graph from the cloud is read with the same rules as the code.
+func CompareIn(cloud string, code, azure *model.Graph, label string) *model.Graph {
 	diff := &model.Graph{Sources: []string{label}}
 
 	codeTypes := map[string]int{}
@@ -41,8 +47,8 @@ func Compare(code, azure *model.Graph, label string) *model.Graph {
 		}
 		added := *n
 		diff.AddNode(&added)
-		diff.Add(model.Medium, n.ID, "Azure adds a resource the code does not name",
-			fmt.Sprintf("%s %q comes from Azure or from a module, not from a resource written in this file. Check whether you want it.", n.Friendly, n.Name), label, 0)
+		diff.Add(model.Medium, n.ID, cloud+" adds a resource the code does not name",
+			fmt.Sprintf("%s %q comes from %s, a module or a transform, not from a resource written in this file. Check whether you want it.", n.Friendly, n.Name, cloud), label, 0)
 	}
 
 	inCode := map[string]bool{}
@@ -60,8 +66,8 @@ func Compare(code, azure *model.Graph, label string) *model.Graph {
 			c := *n
 			diff.AddNode(&c)
 		}
-		diff.Add(f.Severity, f.NodeID, f.Title+" (only in Azure)",
-			f.Detail+" The code does not say this; it is what Azure would build.", label, 0)
+		diff.Add(f.Severity, f.NodeID, f.Title+" (only in "+cloud+")",
+			f.Detail+" The code does not say this; it is what "+cloud+" would build.", label, 0)
 	}
 	var gone []string
 	for _, f := range code.Findings {
@@ -74,8 +80,8 @@ func Compare(code, azure *model.Graph, label string) *model.Graph {
 	}
 	sort.Strings(gone)
 	for _, t := range unique(gone) {
-		diff.Add(model.Low, "", "Not seen in Azure: "+t,
-			"The code shows this risk, but Azure's answer does not. A policy, a default or a value that is only known at deployment may have changed it. Check before you rely on it.", label, 0)
+		diff.Add(model.Low, "", "Not seen in "+cloud+": "+t,
+			"The code shows this risk, but "+cloud+"'s answer does not. A policy, a default or a value that is only known at deployment may have changed it. Check before you rely on it.", label, 0)
 	}
 	diff.Sort()
 	return diff

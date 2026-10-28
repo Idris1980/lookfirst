@@ -29,6 +29,6 @@ lookfirst excerpt --line 42 main.tf
 
 Prints the lines around line 42 as JSON, with passwords and keys replaced by `«SECRET_1»` and so on. The extension uses it before it shows code to an AI model.
 
-## Comparing a template with Azure
+## Comparing a template with Azure or AWS
 
-`lookfirst try` asks Azure what a Bicep or ARM template would really build. See [compare-with-azure.md](compare-with-azure.md).
+`lookfirst try` asks Azure what a Bicep or ARM template would really build, or AWS what a CloudFormation template would. See [compare-with-azure.md](compare-with-azure.md).

@@ -36,6 +36,9 @@ type config struct {
 	locals    []resource
 	variables []variable
 	problems  []model.Finding
+	// policyDocs are data "aws_iam_policy_document" blocks by name, so a
+	// policy = data.aws_iam_policy_document.x.json can be read.
+	policyDocs map[string]*hclsyntax.Body
 }
 
 // Read works out what the given .tf files would build. Each file's content
@@ -79,6 +82,11 @@ func (c *config) parse(path string, src []byte) {
 			c.locals = append(c.locals, resource{"locals", "", b.Body, path, b.DefRange().Start.Line})
 		case b.Type == "variable" && len(b.Labels) == 1:
 			c.variables = append(c.variables, variable{b.Labels[0], b.Body, path, b.DefRange().Start.Line})
+		case b.Type == "data" && len(b.Labels) == 2 && b.Labels[0] == "aws_iam_policy_document":
+			if c.policyDocs == nil {
+				c.policyDocs = map[string]*hclsyntax.Body{}
+			}
+			c.policyDocs[b.Labels[1]] = b.Body
 		}
 	}
 }
