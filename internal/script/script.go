@@ -20,16 +20,34 @@ import (
 
 // Titles fit scripts better than the infrastructure column names.
 var Titles = map[model.Category]string{
-	model.Internet: "Internet",
-	model.Compute:  "Your code",
-	model.Network:  "In the cloud",
-	model.Security: "Programs it runs",
-	model.Data:     "Files",
-	model.Other:    "Packages",
+	model.Internet:      "Internet",
+	model.Compute:       "Your code",
+	model.CloudNetwork:  "Cloud network",
+	model.CloudSecurity: "Cloud security",
+	model.CloudCompute:  "Cloud servers",
+	model.CloudData:     "Cloud data and services",
+	model.Security:      "Programs it runs",
+	model.Data:          "Files",
+	model.Other:         "Packages",
 }
 
-// Order puts the code next to the internet and the things it touches.
-var Order = []model.Category{model.Internet, model.Compute, model.Network, model.Data, model.Security, model.Other}
+// Order puts the code next to the internet and the things it touches, and
+// what it builds in the cloud in layers, network first.
+var Order = []model.Category{model.Internet, model.Compute, model.CloudNetwork, model.CloudSecurity, model.CloudCompute, model.CloudData,
+	model.Data, model.Security, model.Other}
+
+// cloudColumn puts something a script builds in the cloud in its layer.
+func cloudColumn(kind string) model.Category {
+	switch kind {
+	case "network", "subnet", "globe", "publicip", "dns", "loadbalancer", "nic":
+		return model.CloudNetwork
+	case "shield", "firewall", "key", "identity":
+		return model.CloudSecurity
+	case "vm", "function", "kubernetes", "container", "webapp", "plan":
+		return model.CloudCompute
+	}
+	return model.CloudData
+}
 
 var friendly = map[source.Kind]string{
 	source.Python: "Python script", source.JavaScript: "JavaScript", source.Shell: "shell script",
@@ -87,6 +105,7 @@ func (s *scan) run() {
 	s.listening()
 	s.programsRun()
 	s.azureCLI()
+	s.awsCLI()
 	s.packagesUsed()
 	s.secrets()
 	s.weakening()
@@ -150,12 +169,15 @@ var suspicious = []struct{ host, why string }{
 func (s *scan) network() {
 	seen := map[string]bool{}
 	s.each(urlRe, func(l line, m []string) {
+		if s.printedOnly(l.code) {
+			return // an address shown to the reader, not one the code connects to
+		}
 		u, err := url.Parse(strings.TrimRight(m[0], ".:'\""))
 		if err != nil || u.Hostname() == "" {
 			return
 		}
 		host := strings.ToLower(u.Hostname())
-		if host == "localhost" || strings.HasPrefix(host, "127.") || host == "0.0.0.0" || host == "::1" || strings.Contains(host, "${") || strings.Contains(host, "{") {
+		if host == "localhost" || strings.HasPrefix(host, "127.") || host == "0.0.0.0" || host == "::1" || strings.Contains(host, "$") || strings.Contains(host, "{") {
 			return
 		}
 		// Links in help texts and schema URLs are not traffic.
@@ -402,7 +424,7 @@ func (s *scan) azureCLI() {
 			}
 			id := "azure." + c.kind + "." + name
 			s.g.AddNode(&model.Node{ID: id, Name: name, Kind: c.kind, Friendly: c.friendly, Code: "az " + strings.Join(verb, " "),
-				Category: model.Network, File: s.f.Path, Line: l.n})
+				Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n})
 			s.g.Connect(s.me, id, "", false)
 
 			switch c.kind {
@@ -437,6 +459,308 @@ func (s *scan) azureCLI() {
 				s.g.Add(model.High, id, fmt.Sprintf("%s (port %d) is open to the internet", portName, port),
 					why+", and bots find open login ports within minutes. Use --nsg-rule NONE, then allow the port only from your own IP address with az network nsg rule create … --source-address-prefixes.", s.f.Path, l.n)
 			}
+		}
+	}
+}
+
+// --- AWS CLI ------------------------------------------------------------
+
+var (
+	awsCommand = regexp.MustCompile(`(?:^|[;&|({=]\s*)aws\s+(.*)`)
+	// assigned finds the variable a command's answer goes into:
+	// $VpcId = aws … (PowerShell) or VPC_ID=$(aws …) (shell).
+	assigned = regexp.MustCompile(`^\s*\$(\w+)\s*=\s*aws\b|^\s*(\w+)=\$\(\s*aws\b`)
+	varRef   = regexp.MustCompile(`\$\{?(\w+)\}?`)
+	nameTag  = regexp.MustCompile(`Key=Name,Value=([^},\]\s"']+)`)
+	s3Target = regexp.MustCompile(`s3://([\w.-]+)`)
+
+	// awsCreates are the aws commands that build the things most scripts
+	// are about, and how to draw them. Any other create-… or run-… command,
+	// in any AWS service, is drawn too, by awsAnyCreate.
+	awsCreates = []struct {
+		cmd            *regexp.Regexp
+		kind, friendly string
+	}{
+		{regexp.MustCompile(`^ec2\s+create-vpc(\s|$)`), "network", "VPC in AWS"},
+		{regexp.MustCompile(`^ec2\s+create-subnet(\s|$)`), "subnet", "subnet in AWS"},
+		{regexp.MustCompile(`^ec2\s+create-internet-gateway(\s|$)`), "globe", "internet gateway in AWS"},
+		{regexp.MustCompile(`^ec2\s+create-nat-gateway(\s|$)`), "globe", "NAT gateway in AWS"},
+		{regexp.MustCompile(`^ec2\s+create-security-group(\s|$)`), "shield", "security group in AWS"},
+		{regexp.MustCompile(`^ec2\s+create-network-acl(\s|$)`), "firewall", "network ACL in AWS"},
+		{regexp.MustCompile(`^ec2\s+allocate-address(\s|$)`), "publicip", "public IP address in AWS"},
+		{regexp.MustCompile(`^ec2\s+create-key-pair(\s|$)`), "key", "SSH key pair in AWS"},
+		{regexp.MustCompile(`^ec2\s+run-instances(\s|$)`), "vm", "EC2 server in AWS"},
+		{regexp.MustCompile(`^ec2\s+create-volume(\s|$)`), "storage", "EBS disk in AWS"},
+		{regexp.MustCompile(`^rds\s+create-db-(instance|cluster)(\s|$)`), "database", "RDS database in AWS"},
+		{regexp.MustCompile(`^dynamodb\s+create-table(\s|$)`), "database", "DynamoDB table in AWS"},
+		{regexp.MustCompile(`^elasticache\s+create-(cache-cluster|replication-group|serverless-cache)(\s|$)`), "database", "ElastiCache in AWS"},
+		{regexp.MustCompile(`^(docdb|neptune|redshift)\s+create-(db-)?cluster(\s|$)`), "database", "database cluster in AWS"},
+		{regexp.MustCompile(`^opensearch\s+create-domain(\s|$)`), "database", "OpenSearch domain in AWS"},
+		{regexp.MustCompile(`^s3\s+mb(\s|$)|^s3api\s+create-bucket(\s|$)`), "storage", "S3 bucket in AWS"},
+		{regexp.MustCompile(`^efs\s+create-file-system(\s|$)`), "storage", "EFS file system in AWS"},
+		{regexp.MustCompile(`^ecr\s+create-repository(\s|$)`), "storage", "container registry in AWS"},
+		{regexp.MustCompile(`^lambda\s+create-function(\s|$)`), "function", "Lambda function in AWS"},
+		{regexp.MustCompile(`^eks\s+create-cluster(\s|$)`), "kubernetes", "EKS cluster in AWS"},
+		{regexp.MustCompile(`^ecs\s+create-(cluster|service)(\s|$)`), "container", "ECS containers in AWS"},
+		{regexp.MustCompile(`^apprunner\s+create-service(\s|$)`), "container", "App Runner service in AWS"},
+		{regexp.MustCompile(`^elasticbeanstalk\s+create-environment(\s|$)|^lightsail\s+create-instances(\s|$)`), "webapp", "web app in AWS"},
+		{regexp.MustCompile(`^elbv2\s+create-load-balancer(\s|$)|^elb\s+create-load-balancer(\s|$)`), "loadbalancer", "load balancer in AWS"},
+		{regexp.MustCompile(`^cloudfront\s+create-distribution(\s|$)`), "globe", "CloudFront CDN in AWS"},
+		{regexp.MustCompile(`^(apigateway|apigatewayv2)\s+create-(rest-)?api(\s|$)`), "webapp", "API Gateway in AWS"},
+		{regexp.MustCompile(`^route53\s+create-hosted-zone(\s|$)`), "dns", "DNS zone in AWS"},
+		{regexp.MustCompile(`^iam\s+create-(user|role|group)(\s|$)`), "identity", "IAM identity in AWS"},
+		{regexp.MustCompile(`^iam\s+create-access-key(\s|$)`), "key", "IAM access key in AWS"},
+		{regexp.MustCompile(`^kms\s+create-key(\s|$)`), "key", "KMS key in AWS"},
+		{regexp.MustCompile(`^secretsmanager\s+create-secret(\s|$)|^ssm\s+put-parameter(\s|$)`), "key", "stored secret in AWS"},
+		{regexp.MustCompile(`^cognito-idp\s+create-user-pool(\s|$)`), "identity", "Cognito user pool in AWS"},
+		{regexp.MustCompile(`^cloudwatch\s+put-metric-alarm(\s|$)|^logs\s+create-log-group(\s|$)`), "monitor", "CloudWatch in AWS"},
+	}
+	awsAnyCreate = regexp.MustCompile(`^([a-z0-9-]+)\s+(create|run)-([a-z0-9-]+)(\s|$)`)
+	// awsPlumbing are create commands that only wire things together or
+	// tag them; drawing each would bury what is actually built.
+	awsPlumbing = regexp.MustCompile(`^ec2\s+create-(tags|route|route-table|network-acl-entry|vpc-endpoint-service-configuration)(\s|$)|create-(policy-version|login-profile|service-linked-role|invalidation)(\s|$)|^logs\s+create-log-stream(\s|$)`)
+	// awsServiceNames are the names people know the services by.
+	awsServiceNames = map[string]string{
+		"sqs": "SQS", "sns": "SNS", "kinesis": "Kinesis", "firehose": "Firehose", "events": "EventBridge",
+		"stepfunctions": "Step Functions", "glue": "Glue", "athena": "Athena", "emr": "EMR", "mq": "Amazon MQ",
+		"sagemaker": "SageMaker", "bedrock": "Bedrock", "codebuild": "CodeBuild", "codepipeline": "CodePipeline",
+		"codecommit": "CodeCommit", "backup": "AWS Backup", "acm": "Certificate Manager", "wafv2": "WAF",
+		"cloudformation": "CloudFormation", "batch": "AWS Batch", "amplify": "Amplify", "transfer": "Transfer Family",
+		"ses": "SES", "sesv2": "SES", "iot": "IoT Core", "appsync": "AppSync", "lex-models": "Lex", "ssm": "Systems Manager",
+		"ec2": "EC2", "iam": "IAM", "rds": "RDS", "s3api": "S3", "lambda": "Lambda", "ecs": "ECS", "eks": "EKS",
+		"logs": "CloudWatch Logs", "cloudwatch": "CloudWatch", "route53": "Route 53", "kms": "KMS", "elbv2": "load balancer",
+		"apigateway": "API Gateway", "apigatewayv2": "API Gateway", "dynamodb": "DynamoDB", "cognito-idp": "Cognito",
+		"secretsmanager": "Secrets Manager", "organizations": "Organizations", "guardduty": "GuardDuty", "cloudtrail": "CloudTrail",
+	}
+	awsIngress = regexp.MustCompile(`^ec2\s+authorize-security-group-ingress(\s|$)`)
+	awsAttach  = regexp.MustCompile(`^ec2\s+attach-internet-gateway(\s|$)`)
+	publicACL  = regexp.MustCompile(`--acl\s+['"]?public-read`)
+	// --ip-permissions IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=0.0.0.0/0}]
+	ipPermission = regexp.MustCompile(`IpProtocol=([\w-]+)(?:,FromPort=(-?\d+))?(?:,ToPort=(-?\d+))?[^ ]*?CidrIpv?6?=([0-9a-fA-F.:/]+)`)
+	// Policies that give full control of the whole AWS account.
+	adminPolicy = regexp.MustCompile(`arn:aws:iam::aws:policy/(AdministratorAccess|PowerUserAccess|IAMFullAccess)\b`)
+	actionAll   = regexp.MustCompile(`"Action"\s*:\s*\[?\s*"\*"|Action=\*|"Action"\s*:\s*\[?\s*"iam:\*"`)
+)
+
+// awsWhat says how to draw what an aws command creates, if it creates
+// anything worth drawing.
+func awsWhat(args string) (kind, friendly string, ok bool) {
+	if awsPlumbing.MatchString(args) {
+		return "", "", false
+	}
+	for _, c := range awsCreates {
+		if c.cmd.MatchString(args) {
+			return c.kind, c.friendly, true
+		}
+	}
+	m := awsAnyCreate.FindStringSubmatch(args)
+	if m == nil {
+		return "", "", false
+	}
+	service := awsServiceNames[m[1]]
+	if service == "" {
+		service = m[1]
+	}
+	return "generic", service + " " + strings.ReplaceAll(m[3], "-", " ") + " in AWS", true
+}
+
+// awsFlagSet reports whether a flag without a value, such as
+// --publicly-accessible, is given (and not its --no- form).
+func awsFlagSet(args, name string) bool {
+	return regexp.MustCompile(`(?:^|\s)` + regexp.QuoteMeta(name) + `(?:\s|$)`).MatchString(args)
+}
+
+// awsName finds what an aws command calls the thing it creates.
+func awsName(args string) string {
+	if name, _ := azFlag(args, "--group-name", "--db-instance-identifier", "--db-cluster-identifier", "--function-name",
+		"--load-balancer-name", "--cluster-name", "--bucket", "--name"); name != "" {
+		return name
+	}
+	if m := s3Target.FindStringSubmatch(args); m != nil {
+		return m[1]
+	}
+	if m := nameTag.FindStringSubmatch(args); m != nil {
+		return m[1]
+	}
+	// Any other service: --queue-name, --table-name, --topic-name and so on.
+	for _, m := range anyNameFlag.FindAllStringSubmatch(args, -1) {
+		if m[1] != "key-" {
+			return strings.Trim(m[2], `"'`)
+		}
+	}
+	return ""
+}
+
+var anyNameFlag = regexp.MustCompile(`(?:^|\s)--([a-z-]*-)?name(?:\s+|=)("[^"]*"|'[^']*'|\S+)`)
+
+// awsCLI draws what aws commands in a script would create, how the parts
+// hang together through the variables that hold their ids, and checks what
+// they open to the internet.
+func (s *scan) awsCLI() {
+	if s.f.Kind != source.Shell && s.f.Kind != source.PowerShell {
+		return
+	}
+	lines := s.logicalLines()
+
+	// Names given afterwards with create-tags, by the variable holding the id.
+	tagged := map[string]string{}
+	for _, l := range lines {
+		m := awsCommand.FindStringSubmatch(l.code)
+		if m == nil || !strings.HasPrefix(m[1], "ec2 create-tags") {
+			continue
+		}
+		res, _ := azFlag(m[1], "--resources")
+		if v, t := varRef.FindStringSubmatch(res), nameTag.FindStringSubmatch(m[1]); v != nil && t != nil {
+			tagged[v[1]] = t[1]
+		}
+	}
+
+	ids := map[string]string{} // variable -> node id
+	node := func(ref string) (string, bool) {
+		if v := varRef.FindStringSubmatch(ref); v != nil {
+			id, ok := ids[v[1]]
+			return id, ok
+		}
+		return "", false
+	}
+	for _, l := range lines {
+		m := awsCommand.FindStringSubmatch(l.code)
+		if m == nil {
+			continue
+		}
+		args := m[1]
+
+		if kind, friendly, ok := awsWhat(args); ok {
+			c := struct{ kind, friendly string }{kind, friendly}
+			variable := ""
+			if a := assigned.FindStringSubmatch(l.code); a != nil {
+				variable = a[1] + a[2]
+			}
+			name := awsName(args)
+			if name == "" {
+				name = tagged[variable]
+			}
+			if name == "" && variable != "" {
+				name = "$" + variable
+			}
+			if name == "" {
+				name = c.friendly
+			}
+			var verb []string
+			for _, w := range strings.Fields(args) {
+				if strings.HasPrefix(w, "-") || strings.HasPrefix(w, "s3://") {
+					break
+				}
+				verb = append(verb, w)
+			}
+			id := "aws." + c.kind + "." + name
+			s.g.AddNode(&model.Node{ID: id, Name: name, Kind: c.kind, Friendly: c.friendly, Code: "aws " + strings.Join(verb, " "),
+				Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n})
+			if variable != "" {
+				ids[variable] = id
+			}
+			// A line to what it is built in or protected by; the script itself
+			// only points at what stands on its own, such as the VPC.
+			linked := false
+			for _, r := range varRef.FindAllStringSubmatch(args, -1) {
+				if to, ok := ids[r[1]]; ok && to != id {
+					s.g.Connect(id, to, "", false)
+					linked = true
+				}
+			}
+			if !linked {
+				s.g.Connect(s.me, id, "", false)
+			}
+
+			switch c.kind {
+			case "vm":
+				if awsFlagSet(args, "--associate-public-ip-address") {
+					s.g.Expose(id, "", false)
+					s.g.Add(model.Low, id, "Reachable from the internet",
+						"This server gets a public IP address. Check which ports its security group opens.", s.f.Path, l.n)
+				}
+			case "database":
+				if awsFlagSet(args, "--publicly-accessible") {
+					s.g.Expose(id, "public endpoint", true)
+					s.g.Add(model.High, id, "Database reachable from the internet",
+						"--publicly-accessible gives the database a public address. Leave it out and connect from inside the VPC.", s.f.Path, l.n)
+				}
+			}
+			if publicACL.MatchString(args) {
+				s.g.Add(model.High, id, "Bucket is public", "The ACL lets anyone on the internet access this bucket. Use private.", s.f.Path, l.n)
+			}
+		}
+
+		switch {
+		case awsAttach.MatchString(args):
+			gw, _ := azFlag(args, "--internet-gateway-id")
+			vpc, _ := azFlag(args, "--vpc-id")
+			if from, ok := node(gw); ok {
+				if to, ok := node(vpc); ok {
+					s.g.Connect(from, to, "", false)
+				}
+			}
+		case awsIngress.MatchString(args):
+			group, _ := azFlag(args, "--group-id")
+			target, ok := node(group)
+			if !ok {
+				target = s.me
+			}
+			// The short form: --protocol tcp --port 22 --cidr 0.0.0.0/0.
+			spec, _ := azFlag(args, "--port")
+			if p, _ := azFlag(args, "--protocol"); p == "-1" || strings.EqualFold(p, "all") {
+				spec = "*"
+			}
+			if spec == "" || strings.HasPrefix(spec, "$") {
+				spec = "?"
+			}
+			if src, _ := azFlag(args, "--source-group"); src != "" {
+				if from, ok := node(src); ok {
+					s.g.Connect(from, target, "port "+spec, false)
+				}
+			}
+			if cidr, _ := azFlag(args, "--cidr"); risk.FromAnywhere([]string{cidr}) {
+				risk.OpenPorts(s.g, target, []string{spec}, s.f.Path, l.n)
+			}
+			// The long form: --ip-permissions IpProtocol=…,FromPort=…,ToPort=…,IpRanges=[{CidrIp=…}].
+			for _, p := range ipPermission.FindAllStringSubmatch(args, -1) {
+				if !risk.FromAnywhere([]string{p[4]}) {
+					continue
+				}
+				spec := p[2]
+				switch {
+				case p[1] == "-1" || strings.EqualFold(p[1], "all"):
+					spec = "*"
+				case p[2] == "":
+					spec = "?"
+				case p[3] != "" && p[3] != p[2]:
+					spec = p[2] + "-" + p[3]
+				}
+				risk.OpenPorts(s.g, target, []string{spec}, s.f.Path, l.n)
+			}
+		case strings.HasPrefix(args, "s3api put-bucket-acl") && publicACL.MatchString(args),
+			strings.HasPrefix(args, "s3 cp") && publicACL.MatchString(args),
+			strings.HasPrefix(args, "s3 sync") && publicACL.MatchString(args):
+			s.g.Add(model.High, s.me, "Files are made public", "--acl public-read lets anyone on the internet read these files. Leave the ACL out, or use private.", s.f.Path, l.n)
+		case strings.HasPrefix(args, "s3api put-public-access-block") && strings.Contains(args, "=false"):
+			s.g.Add(model.Medium, s.me, "Public access is not blocked",
+				"One of the four public access blocks is false, so the bucket can be made public by mistake. Set all four to true.", s.f.Path, l.n)
+		case strings.HasPrefix(args, "iam ") && adminPolicy.MatchString(args):
+			s.g.Add(model.High, s.me, "Full control of the AWS account",
+				"This gives "+adminPolicy.FindStringSubmatch(args)[1]+", which can change almost everything in the account. Give only the permissions that are needed.", s.f.Path, l.n)
+		case strings.HasPrefix(args, "iam ") && actionAll.MatchString(args):
+			s.g.Add(model.High, s.me, "Permission to do everything",
+				`The policy allows every action ("*"). Name the actions that are needed instead.`, s.f.Path, l.n)
+		case strings.HasPrefix(args, "lambda add-permission") && regexp.MustCompile(`--principal\s+['"]?\*`).MatchString(args):
+			s.g.Add(model.High, s.me, "Anyone can call the function",
+				"--principal * lets any AWS account, or anyone on the internet, run this Lambda function. Name the service or account that needs it.", s.f.Path, l.n)
+		case strings.HasPrefix(args, "lambda create-function-url-config") && regexp.MustCompile(`--auth-type\s+['"]?NONE`).MatchString(args):
+			s.g.Add(model.Medium, s.me, "Function is open on the internet without login",
+				"--auth-type NONE gives the Lambda function a public address that anyone can call. Use AWS_IAM, or check the caller in the function.", s.f.Path, l.n)
+		}
+		if strings.HasPrefix(args, "iam create-access-key") {
+			s.g.Add(model.Medium, s.me, "Creates a long-lived access key",
+				"Access keys do not expire and are often leaked. Prefer roles, or IAM Identity Center for people, and delete keys you no longer use.", s.f.Path, l.n)
 		}
 	}
 }
@@ -647,7 +971,7 @@ var (
 		{regexp.MustCompile(`\bgit\s+push\b.*(--force|-f\b)`), "overwrites history on the remote repository"},
 		{regexp.MustCompile(`(?i)\bDROP\s+(DATABASE|TABLE)\b`), "deletes a database or table"},
 	}
-	cliSecretFlag = regexp.MustCompile(`--(admin-password|password|client-secret|secret|token|access-key|secret-key|sas-token|account-key)[= ]+['"]?([^\s'"]+)`)
+	cliSecretFlag = regexp.MustCompile(`--(admin-password|master-user-password|password|client-secret|secret|token|access-key|secret-key|sas-token|account-key)[= ]+['"]?([^\s'"]+)`)
 )
 
 func (s *scan) programsRun() {

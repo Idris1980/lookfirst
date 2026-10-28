@@ -122,8 +122,10 @@ func plural(n int, word string) string {
 	if n == 1 {
 		return "1 " + word
 	}
-	if first, rest, ok := strings.Cut(word, " on "); ok {
-		return plural(n, first) + " on " + rest // "folders on the host"
+	for _, sep := range []string{" on ", " in "} {
+		if first, rest, ok := strings.Cut(word, sep); ok {
+			return plural(n, first) + sep + rest // "folders on the host", "subnets in AWS"
+		}
 	}
 	switch {
 	case strings.HasSuffix(word, "ss"), strings.HasSuffix(word, "sh"), strings.HasSuffix(word, "ch"), strings.HasSuffix(word, "x"):

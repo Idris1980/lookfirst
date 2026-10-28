@@ -10,6 +10,7 @@ func TestPlural(t *testing.T) {
 		"SQL connection policy": "2 SQL connection policies",
 		"folder on the host":    "2 folders on the host",
 		"gateway":               "2 gateways",
+		"security group in AWS": "2 security groups in AWS",
 	}
 	for word, want := range cases {
 		if got := plural(2, word); got != want {

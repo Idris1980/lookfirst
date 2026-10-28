@@ -19,9 +19,17 @@ const (
 	Compute
 	Data
 	Other
+
+	// What a script builds in the cloud (with az or aws), drawn in columns
+	// of their own next to the script's own Compute, Security and Data. They
+	// share those names, and so their colors.
+	CloudNetwork
+	CloudSecurity
+	CloudCompute
+	CloudData
 )
 
-var categoryNames = [...]string{"Internet", "Network", "Security", "Compute", "Data", "Other"}
+var categoryNames = [...]string{"Internet", "Network", "Security", "Compute", "Data", "Other", "Network", "Security", "Compute", "Data"}
 
 func (c Category) String() string { return categoryNames[c] }
 

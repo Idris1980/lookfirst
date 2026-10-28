@@ -171,6 +171,68 @@ func TestNotRisky(t *testing.T) {
 	}
 }
 
+// An AWS CLI script: what it builds is drawn and tied together through the
+// variables holding the ids, and what it opens is checked.
+func TestAWSCLI(t *testing.T) {
+	ps := "$VpcId = aws ec2 create-vpc --cidr-block 10.0.0.0/16 --query Vpc.VpcId --output text\n" +
+		"aws ec2 create-tags --resources $VpcId --tags Key=Name,Value=demo-vpc\n" +
+		"$Sub = aws ec2 create-subnet --vpc-id $VpcId --cidr-block 10.0.1.0/24 --query Subnet.SubnetId --output text\n" +
+		"$WebSg = aws ec2 create-security-group --group-name web-sg `\n" +
+		"    --description \"web\" --vpc-id $VpcId --query GroupId --output text\n" +
+		"aws ec2 authorize-security-group-ingress --group-id $WebSg --protocol tcp --port 80 --cidr 0.0.0.0/0\n" +
+		"aws ec2 authorize-security-group-ingress --group-id $WebSg --protocol tcp --port 22 --cidr \"$MinIp/32\"\n" +
+		"aws ec2 authorize-security-group-ingress --group-id $WebSg --ip-permissions IpProtocol=tcp,FromPort=3389,ToPort=3389,IpRanges=[{CidrIp=0.0.0.0/0}]\n" +
+		"$Nacl = aws ec2 create-network-acl --vpc-id $VpcId --query NetworkAcl.NetworkAclId --output text\n" +
+		"aws ec2 create-network-acl-entry --network-acl-id $Nacl --ingress --rule-number 130 --protocol tcp --port-range From=1024,To=65535 --cidr-block 0.0.0.0/0 --rule-action allow\n" +
+		"$Web = aws ec2 run-instances --image-id ami-1 --subnet-id $Sub --security-group-ids $WebSg --associate-public-ip-address `\n" +
+		"    --tag-specifications \"ResourceType=instance,Tags=[{Key=Name,Value=web}]\" --query Instances[0].InstanceId --output text\n" +
+		"aws rds create-db-instance --db-instance-identifier shop-db --engine mysql --publicly-accessible --master-user-password Hunter2Hunter2\n" +
+		"aws sqs create-queue --queue-name orders\n" +
+		"aws iam attach-role-policy --role-name app --policy-arn arn:aws:iam::aws:policy/AdministratorAccess\n" +
+		"aws lambda add-permission --function-name f --statement-id s --action lambda:InvokeFunction --principal '*'\n" +
+		"Write-Host \"Done: http://$WebIp\"\n"
+	g := Read([]source.File{{Path: "deploy.ps1", Kind: source.PowerShell, Data: []byte(ps)}})
+	got := map[string][]int{}
+	for _, f := range g.Findings {
+		got[f.Title] = append(got[f.Title], f.Line)
+	}
+	want := map[string][]int{
+		"Web traffic (port 80) is allowed from the internet":       {6},
+		"Remote Desktop (RDP) (port 3389) is open to the internet": {8},
+		"Reachable from the internet":                              {11},
+		"Database reachable from the internet":                     {13},
+		"Full control of the AWS account":                          {15},
+		"Anyone can call the function":                             {16},
+	}
+	for title, lines := range want {
+		if !reflect.DeepEqual(got[title], lines) {
+			t.Errorf("%q on lines %v, want %v", title, got[title], lines)
+		}
+	}
+	for _, title := range []string{"SSH (port 22) is open to the internet", "Unencrypted connection", "Every port is open to the internet"} {
+		if got[title] != nil {
+			t.Errorf("unexpected %q on lines %v", title, got[title])
+		}
+	}
+	if len(got["Password or key written in the code"]) != 1 {
+		t.Errorf("the RDS password was not found: %v", got)
+	}
+	for _, id := range []string{"aws.network.demo-vpc", "aws.subnet.$Sub", "aws.shield.web-sg", "aws.firewall.$Nacl", "aws.vm.web", "aws.database.shop-db", "aws.generic.orders"} {
+		if g.Node(id) == nil {
+			t.Errorf("the picture is missing %q", id)
+		}
+	}
+	nacls := 0
+	for _, n := range g.Nodes {
+		if n.Kind == "firewall" {
+			nacls++
+		}
+	}
+	if nacls != 1 {
+		t.Errorf("%d network ACLs drawn, want 1 (an entry is not an ACL)", nacls)
+	}
+}
+
 func TestStripComments(t *testing.T) {
 	cases := []struct {
 		kind      source.Kind
