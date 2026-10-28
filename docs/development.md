@@ -20,9 +20,9 @@ node --test "vscode/test/*.test.js"
 - `internal/risk` – rules shared by all readers: ports, secrets, placeholders, masking
 - `internal/analyze` – runs the readers and groups the results per folder
 - `internal/render` – the report (HTML), text, JSON, Markdown and GitHub output
-- `internal/azuretry` – compares a template with Azure's answer
+- `internal/azuretry`, `awstry` – compare a template with Azure's or AWS's answer
 - `vscode/` – the extension; `site/` – the web page; `action.yml` – the GitHub Action
 
 ## Releases
 
-Pushing a tag such as `v0.12.0` (matching `vscode/package.json`) builds, signs and publishes a release through `.github/workflows/release.yml`.
+Pushing a tag such as `v0.13.0` (matching `vscode/package.json`) builds, signs and publishes a release through `.github/workflows/release.yml`.
