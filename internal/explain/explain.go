@@ -19,10 +19,12 @@ func Summary(g *model.Graph) []string {
 
 	counts := map[string]int{}
 	total := 0
-	var hosts, files, programs, packages []string
+	var hosts, files, programs, packages, templates []string
 	for _, n := range g.Nodes {
 		switch {
 		case n.ID == model.InternetID, strings.HasPrefix(n.ID, "script."):
+		case strings.HasPrefix(n.ID, "deploy."):
+			templates = append(templates, n.Name)
 		case strings.HasPrefix(n.ID, "host."):
 			hosts = append(hosts, n.Name)
 		case strings.HasPrefix(n.ID, "file."):
@@ -40,6 +42,11 @@ func Summary(g *model.Graph) []string {
 	}
 	if total > 0 {
 		out = append(out, fmt.Sprintf("This code would create %s: %s.", plural(total, "resource"), list(counts)))
+	}
+	if len(templates) > 0 {
+		out = append(out, fmt.Sprintf("It hands %s to the cloud to build: %s. What %s builds is shown in %s own picture, under %s folder.",
+			plural(len(templates), "template"), join(templates, 5), pick(len(templates), "that template", "those templates"),
+			pick(len(templates), "its", "their"), pick(len(templates), "its", "their")))
 	}
 	if len(hosts) > 0 {
 		out = append(out, fmt.Sprintf("It talks to %s on the internet: %s.", plural(len(hosts), "place"), join(hosts, 5)))
@@ -116,6 +123,13 @@ func and(parts []string) string {
 		return parts[0]
 	}
 	return strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
+}
+
+func pick(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 func plural(n int, word string) string {

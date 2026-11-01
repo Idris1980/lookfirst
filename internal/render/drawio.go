@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/Idris1980/lookfirst/internal/model"
@@ -23,6 +24,7 @@ func DrawIO(w io.Writer, sections []Section) error {
 	for si, s := range sections {
 		g := s.Graph
 		l := layoutRows(g, 0)
+		root := commonRoot(g.Sources)
 		name := s.Name
 		if name == "" {
 			name = "LookFirst"
@@ -57,9 +59,11 @@ func DrawIO(w io.Writer, sections []Section) error {
 			if n.Code != "" && n.Code != n.Name {
 				value += "\n" + n.Code
 			}
+			// Paths relative to the folder that was read: the file may be
+			// shared, and should not show how someone's disk is organised.
 			tooltip := ""
 			if n.File != "" {
-				tooltip = fmt.Sprintf("%s:%d", n.File, n.Line)
+				tooltip = fmt.Sprintf("%s:%d", relTo(root, n.File), n.Line)
 			}
 			fmt.Fprintf(&b, `        <mxCell id="%s" value="%s" tooltip="%s" style="rounded=1;arcSize=12;whiteSpace=wrap;html=0;fillColor=%s;strokeColor=%s;strokeWidth=%.1f;fontSize=11;align=left;spacingLeft=10;" vertex="1" parent="1"><mxGeometry x="%d" y="%d" width="%d" height="%d" as="geometry"/></mxCell>`+"\n",
 				id, xmlText(value), xmlText(tooltip), fill, stroke, width, pos.x, pos.y, nodeW, nodeH)
@@ -81,6 +85,40 @@ func DrawIO(w io.Writer, sections []Section) error {
 	b.WriteString("</mxfile>\n")
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// commonRoot is the deepest folder holding every file that was read.
+func commonRoot(files []string) string {
+	root := ""
+	for i, f := range files {
+		dir := filepath.Dir(filepath.Clean(f))
+		if i == 0 {
+			root = dir
+			continue
+		}
+		for root != "" && !strings.HasPrefix(strings.ToLower(dir)+string(filepath.Separator), strings.ToLower(root)+string(filepath.Separator)) {
+			parent := filepath.Dir(root)
+			if parent == root {
+				return ""
+			}
+			root = parent
+		}
+	}
+	// One level up, so the folder's own name is kept: v40/deploy.ps1.
+	if root != "" && filepath.Dir(root) != root {
+		root = filepath.Dir(root)
+	}
+	return root
+}
+
+func relTo(root, file string) string {
+	if root == "" {
+		return filepath.ToSlash(filepath.Base(file))
+	}
+	if rel, err := filepath.Rel(root, file); err == nil && !strings.HasPrefix(rel, "..") {
+		return filepath.ToSlash(rel)
+	}
+	return filepath.ToSlash(filepath.Base(file))
 }
 
 // drawioColors are the report's column colours.

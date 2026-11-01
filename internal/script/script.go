@@ -105,6 +105,7 @@ func (s *scan) run() {
 	s.listening()
 	s.programsRun()
 	s.azureCLI()
+	s.templateDeployments()
 	if s.f.Kind == source.PowerShell {
 		s.azPowerShell()
 	}
@@ -709,7 +710,7 @@ var (
 	awsAnyCreate = regexp.MustCompile(`^([a-z0-9-]+)\s+(create|run)-([a-z0-9-]+)(\s|$)`)
 	// awsPlumbing are create commands that only wire things together or
 	// tag them; drawing each would bury what is actually built.
-	awsPlumbing = regexp.MustCompile(`^ec2\s+create-(tags|route|route-table|network-acl-entry|vpc-endpoint-service-configuration)(\s|$)|create-(policy-version|login-profile|service-linked-role|invalidation)(\s|$)|^logs\s+create-log-stream(\s|$)`)
+	awsPlumbing = regexp.MustCompile(`^ec2\s+create-(tags|route|route-table|network-acl-entry|vpc-endpoint-service-configuration)(\s|$)|create-(policy-version|login-profile|service-linked-role|invalidation)(\s|$)|^logs\s+create-log-stream(\s|$)|^cloudformation\s`)
 	// awsServiceNames are the names people know the services by.
 	awsServiceNames = map[string]string{
 		"sqs": "SQS", "sns": "SNS", "kinesis": "Kinesis", "firehose": "Firehose", "events": "EventBridge",

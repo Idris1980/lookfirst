@@ -390,6 +390,32 @@ New-AzRoleAssignment -ObjectId x -RoleDefinitionName Contributor -Scope /subscri
 	}
 }
 
+// A script that hands a template to the cloud shows which template, also
+// when the path is built with Join-Path.
+func TestTemplateDeployments(t *testing.T) {
+	ps := `$mall = Join-Path $PSScriptRoot "templates" "azuredeploy.json"
+az deployment group create --resource-group rg ` + "`" + `
+  --template-file $mall --output none
+New-AzResourceGroupDeployment -ResourceGroupName rg -TemplateFile "$PSScriptRoot\infra\main.bicep"
+`
+	g := Read([]source.File{{Path: "deploy.ps1", Kind: source.PowerShell, Data: []byte(ps)}})
+	for _, id := range []string{"deploy.azure.templates/azuredeploy.json", "deploy.azure.infra/main.bicep"} {
+		if g.Node(id) == nil {
+			t.Errorf("missing %q; nodes: %v", id, g.Nodes)
+		}
+	}
+	sh := "aws cloudformation deploy --stack-name app --template-file ./cfn/template.yaml\n"
+	g = Read([]source.File{{Path: "deploy.sh", Kind: source.Shell, Data: []byte(sh)}})
+	if g.Node("deploy.aws.cfn/template.yaml") == nil {
+		t.Errorf("missing the CloudFormation template; nodes: %v", g.Nodes)
+	}
+	for _, n := range g.Nodes {
+		if strings.HasPrefix(n.ID, "aws.") {
+			t.Errorf("the stack is drawn twice: %v", n.ID)
+		}
+	}
+}
+
 func TestStripComments(t *testing.T) {
 	cases := []struct {
 		kind      source.Kind
