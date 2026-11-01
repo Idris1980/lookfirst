@@ -31,14 +31,27 @@ type Project struct {
 // Paths reads the given files and folders and returns one project per
 // folder that holds code, in folder order.
 func Paths(paths []string) ([]Project, error) {
-	files, skipped, err := source.Collect(paths)
+	res, err := source.CollectAll(paths)
 	if err != nil {
 		return nil, err
 	}
+	files, skipped := res.Files, res.Skipped
 	if len(files) == 0 {
 		return nil, ErrNothing
 	}
 	projects := Group(files)
+	// Each file LookFirst did not read goes with the project in its own
+	// folder, or the nearest folder above it, or else the first project.
+	for _, p := range res.NotRead {
+		best := 0
+		depth := -1
+		for i, pr := range projects {
+			if within(pr.Dir, filepath.Dir(p)) && len(pr.Dir) > depth {
+				best, depth = i, len(pr.Dir)
+			}
+		}
+		projects[best].Graph.NotRead = append(projects[best].Graph.NotRead, p)
+	}
 	for _, p := range skipped {
 		g := projects[0].Graph
 		for _, pr := range projects {

@@ -105,6 +105,9 @@ func (s *scan) run() {
 	s.listening()
 	s.programsRun()
 	s.azureCLI()
+	if s.f.Kind == source.PowerShell {
+		s.azPowerShell()
+	}
 	s.awsCLI()
 	s.packagesUsed()
 	s.secrets()
@@ -333,21 +336,49 @@ func (s *scan) downloadThenRun() {
 var (
 	azCommand = regexp.MustCompile(`(?:^|[;&|({=]\s*)az\s+(.*)`)
 
-	// azCreates are the az commands that build something, and how to draw it.
+	// azCreates are the az commands that build the things most scripts are
+	// about, and how to draw them. Any other az … create command is drawn
+	// too, by azAnyCreate.
 	azCreates = []struct {
 		cmd            *regexp.Regexp
 		kind, friendly string
 	}{
 		{regexp.MustCompile(`^vm\s+create\b`), "vm", "virtual machine in Azure"},
+		{regexp.MustCompile(`^vmss\s+create\b`), "vm", "VM scale set in Azure"},
 		{regexp.MustCompile(`^(postgres|mysql)\s+(flexible-server\s+|server\s+)?create\b`), "database", "database in Azure"},
 		{regexp.MustCompile(`^sql\s+server\s+create\b`), "database", "SQL server in Azure"},
+		{regexp.MustCompile(`^sql\s+db\s+create\b`), "database", "SQL database in Azure"},
+		{regexp.MustCompile(`^cosmosdb\s+create\b`), "database", "Cosmos DB in Azure"},
+		{regexp.MustCompile(`^redis\s+create\b`), "database", "Redis cache in Azure"},
 		{regexp.MustCompile(`^storage\s+account\s+create\b`), "storage", "storage account in Azure"},
+		{regexp.MustCompile(`^storage\s+container\s+create\b`), "storage", "storage container in Azure"},
+		{regexp.MustCompile(`^acr\s+create\b`), "storage", "container registry in Azure"},
 		{regexp.MustCompile(`^(webapp|functionapp)\s+create\b`), "webapp", "web app in Azure"},
+		{regexp.MustCompile(`^appservice\s+plan\s+create\b`), "plan", "App Service plan in Azure"},
+		{regexp.MustCompile(`^staticwebapp\s+create\b`), "webapp", "Static Web App in Azure"},
 		{regexp.MustCompile(`^aks\s+create\b`), "kubernetes", "Kubernetes in Azure"},
 		{regexp.MustCompile(`^keyvault\s+create\b`), "key", "key vault in Azure"},
 		{regexp.MustCompile(`^(containerapp|container)\s+create\b`), "container", "container in Azure"},
 		{regexp.MustCompile(`^network\s+vnet\s+create\b`), "network", "virtual network in Azure"},
+		{regexp.MustCompile(`^network\s+vnet\s+subnet\s+create\b`), "subnet", "subnet in Azure"},
+		{regexp.MustCompile(`^network\s+nsg\s+create\b`), "shield", "network security group in Azure"},
+		{regexp.MustCompile(`^network\s+public-ip\s+create\b`), "publicip", "public IP address in Azure"},
+		{regexp.MustCompile(`^network\s+(lb|application-gateway)\s+create\b`), "loadbalancer", "load balancer in Azure"},
+		{regexp.MustCompile(`^network\s+bastion\s+create\b`), "shield", "Azure Bastion in Azure"},
+		{regexp.MustCompile(`^network\s+private-endpoint\s+create\b`), "nic", "private endpoint in Azure"},
+		{regexp.MustCompile(`^network\s+(dns|private-dns)\s+zone\s+create\b`), "dns", "DNS zone in Azure"},
+		{regexp.MustCompile(`^(afd|cdn)\s+profile\s+create\b|^network\s+front-door\s+create\b`), "globe", "Front Door in Azure"},
+		{regexp.MustCompile(`^apim\s+create\b`), "webapp", "API Management in Azure"},
+		{regexp.MustCompile(`^identity\s+create\b`), "identity", "managed identity in Azure"},
+		{regexp.MustCompile(`^role\s+assignment\s+create\b`), "identity", "role assignment in Azure"},
+		{regexp.MustCompile(`^(servicebus|eventhubs)\s+namespace\s+create\b`), "relay", "messaging in Azure"},
+		{regexp.MustCompile(`^monitor\s+log-analytics\s+workspace\s+create\b`), "monitor", "Log Analytics in Azure"},
 	}
+	// azAnyCreate is any other az … create, such as az search service create.
+	azAnyCreate = regexp.MustCompile(`^((?:[a-z0-9-]+\s+){1,3})create(\s|$)`)
+	// azPlumbing are create commands that only change or wire other things.
+	azPlumbing     = regexp.MustCompile(`(^|\s)(firewall-rule|rule|peering|secret|key|assignment\s+create\s+--assignee-object-id)\s+create\b|^(group|deployment\s+\S+|ad\s+\S+|tag)\s+create\b`)
+	azBroadRole    = regexp.MustCompile(`(?i)--role\s+['"]?(Owner|Contributor|User Access Administrator)['"]?(\s|$)`)
 	azFirewallRule = regexp.MustCompile(`^((postgres|mysql)\s+(flexible-server\s+|server\s+)?|sql\s+server\s+)firewall-rule\s+create\b`)
 	windowsImage   = regexp.MustCompile(`(?i)win`)
 )
@@ -391,11 +422,116 @@ func azFlag(args string, names ...string) (string, bool) {
 // azureCLI draws what az commands in a script would create in Azure, and
 // checks the settings that open it to the internet. Some of them are az's
 // defaults, so the risk is there even though the code does not name it.
+// azWhat says how to draw what an az command creates, if it creates
+// anything worth drawing.
+func azWhat(args string) (kind, friendly string, ok bool) {
+	for _, c := range azCreates {
+		if c.cmd.MatchString(args) {
+			return c.kind, c.friendly, true
+		}
+	}
+	if azPlumbing.MatchString(args) {
+		return "", "", false
+	}
+	if m := azAnyCreate.FindStringSubmatch(args); m != nil {
+		return "generic", strings.TrimSpace(m[1]) + " in Azure", true
+	}
+	return "", "", false
+}
+
+// azureSettings checks az commands that change something rather than
+// create it: an NSG rule, which by default allows everyone in, and the
+// settings of a web app.
+func (s *scan) azureSettings(args string, byName map[string]string, ln int) {
+	target := func(flags ...string) string {
+		for _, f := range flags {
+			if name, _ := azFlag(args, f); name != "" {
+				if id, ok := byName[name]; ok {
+					return id
+				}
+			}
+		}
+		return s.me
+	}
+	switch {
+	case strings.HasPrefix(args, "network nsg rule create"):
+		// The defaults are Allow, Inbound, from every address ("*"), to port 80.
+		access, _ := azFlag(args, "--access")
+		direction, _ := azFlag(args, "--direction")
+		if (access != "" && !strings.EqualFold(access, "Allow")) || (direction != "" && !strings.EqualFold(direction, "Inbound")) {
+			return
+		}
+		sources := azFlagList(args, "--source-address-prefixes")
+		if len(sources) == 0 {
+			sources = []string{"*"}
+		}
+		if !risk.FromAnywhere(sources) {
+			return
+		}
+		ports := azFlagList(args, "--destination-port-ranges")
+		if len(ports) == 0 {
+			ports = []string{"80"}
+		}
+		node := target("--nsg-name")
+		if node != s.me {
+			s.g.Expose(node, "", false)
+		}
+		risk.OpenPorts(s.g, node, ports, s.f.Path, ln)
+	case strings.HasPrefix(args, "webapp config set") || strings.HasPrefix(args, "functionapp config set"):
+		node := target("--name", "-n")
+		if v, _ := azFlag(args, "--ftps-state"); strings.EqualFold(v, "AllAllowed") {
+			s.g.Add(model.Medium, node, "Files can be uploaded over unencrypted FTP", "--ftps-state AllAllowed lets anyone with the deployment password upload files over plain FTP. Use FtpsOnly, or Disabled.", s.f.Path, ln)
+		}
+		if v, _ := azFlag(args, "--min-tls-version"); v == "1.0" || v == "1.1" {
+			s.g.Add(model.Medium, node, "Old TLS version allowed", "--min-tls-version "+v+" allows encryption that is no longer considered safe. Use 1.2 or newer.", s.f.Path, ln)
+		}
+		if v, _ := azFlag(args, "--remote-debugging-enabled"); strings.EqualFold(v, "true") {
+			s.g.Add(model.Medium, node, "Remote debugging is on", "--remote-debugging-enabled true opens a debugging port on the app. Turn it off outside short debugging sessions.", s.f.Path, ln)
+		}
+	case strings.HasPrefix(args, "webapp update"):
+		if v, _ := azFlag(args, "--https-only"); strings.EqualFold(v, "false") {
+			s.g.Add(model.Medium, target("--name", "-n"), "No HTTPS", "--https-only false lets the app answer on plain HTTP.", s.f.Path, ln)
+		}
+	}
+}
+
+// azFlagList returns every value after a flag that takes several, such as
+// --destination-port-ranges 22 3389.
+func azFlagList(args, name string) []string {
+	fields := strings.Fields(args)
+	for i, f := range fields {
+		if f != name {
+			continue
+		}
+		var out []string
+		for _, v := range fields[i+1:] {
+			if strings.HasPrefix(v, "-") {
+				break
+			}
+			out = append(out, strings.Trim(v, `"'`))
+		}
+		return out
+	}
+	return nil
+}
+
 func (s *scan) azureCLI() {
 	if s.f.Kind != source.Shell && s.f.Kind != source.PowerShell {
 		return
 	}
-	for _, l := range s.logicalLines() {
+	lines := s.logicalLines()
+	// Settings made after creating something, such as
+	// az webapp update --https-only true, count for the whole script.
+	httpsLater := false
+	for _, l := range lines {
+		if m := azCommand.FindStringSubmatch(l.code); m != nil && strings.HasPrefix(m[1], "webapp update") {
+			if v, _ := azFlag(m[1], "--https-only"); strings.EqualFold(v, "true") {
+				httpsLater = true
+			}
+		}
+	}
+	byName := map[string]string{} // name given with --name -> node id
+	for _, l := range lines {
 		m := azCommand.FindStringSubmatch(l.code)
 		if m == nil {
 			continue
@@ -407,10 +543,9 @@ func (s *scan) azureCLI() {
 			s.databaseAccess(s.me, start+"-"+end, l.n)
 			continue
 		}
-		for _, c := range azCreates {
-			if !c.cmd.MatchString(args) {
-				continue
-			}
+		s.azureSettings(args, byName, l.n)
+		if kind, friendly, ok := azWhat(args); ok {
+			c := struct{ kind, friendly string }{kind, friendly}
 			var verb []string
 			for _, w := range strings.Fields(args) {
 				if strings.HasPrefix(w, "-") {
@@ -424,20 +559,76 @@ func (s *scan) azureCLI() {
 			}
 			id := "azure." + c.kind + "." + name
 			s.g.AddNode(&model.Node{ID: id, Name: name, Kind: c.kind, Friendly: c.friendly, Code: "az " + strings.Join(verb, " "),
-				Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n})
+				Cloud: "azure", Type: "az " + strings.Join(verb, " "), Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n})
 			s.g.Connect(s.me, id, "", false)
+			byName[name] = id
+			add := func(sev model.Severity, title, detail string) { s.g.Add(sev, id, title, detail, s.f.Path, l.n) }
+			cmd := strings.Join(verb, " ")
+			// Services that answer every network unless told otherwise.
+			openByDefault := cmd == "storage account create" || cmd == "keyvault create" || cmd == "cosmosdb create" || cmd == "acr create" || cmd == "redis create"
 
-			switch c.kind {
-			case "database":
+			switch {
+			case c.kind == "database" && cmd != "cosmosdb create" && cmd != "redis create":
 				if v, ok := azFlag(args, "--public-access"); ok {
 					s.databaseAccess(id, v, l.n)
 				}
-			case "storage":
+			case cmd == "storage account create":
 				if v, ok := azFlag(args, "--allow-blob-public-access"); ok && strings.EqualFold(v, "true") {
 					s.g.Expose(id, "public read", true)
-					s.g.Add(model.High, id, "Files can be made public",
-						"--allow-blob-public-access true lets containers in this account be opened to anyone on the internet. Leave it out, or set it to false.", s.f.Path, l.n)
+					add(model.High, "Files can be made public",
+						"--allow-blob-public-access true lets containers in this account be opened to anyone on the internet. Leave it out, or set it to false.")
 				}
+				if v, _ := azFlag(args, "--https-only"); strings.EqualFold(v, "false") {
+					add(model.Medium, "Unencrypted traffic is allowed", "--https-only false lets data travel over plain HTTP. Leave it out (the default is true).")
+				}
+				if v, _ := azFlag(args, "--min-tls-version"); v == "TLS1_0" || v == "TLS1_1" {
+					add(model.Medium, "Old TLS version allowed", "--min-tls-version "+v+" allows encryption that is no longer considered safe. Use TLS1_2.")
+				}
+			case cmd == "storage container create":
+				if v, _ := azFlag(args, "--public-access"); strings.EqualFold(v, "blob") || strings.EqualFold(v, "container") {
+					s.g.Expose(id, "public read", true)
+					add(model.High, "Files are public", "--public-access "+v+" lets anyone on the internet read the files in this container. Leave it out, or use off.")
+				}
+			case cmd == "webapp create" || cmd == "functionapp create":
+				if v, _ := azFlag(args, "--https-only"); !strings.EqualFold(v, "true") && !httpsLater {
+					add(model.Low, "No HTTPS", "The app also answers on plain HTTP, because --https-only is false by default. Add --https-only true, or run az webapp update --https-only true.")
+				}
+			case cmd == "keyvault create":
+				if v, _ := azFlag(args, "--enable-purge-protection"); !strings.EqualFold(v, "true") {
+					add(model.Low, "Deleted secrets can be lost for good", "Without purge protection, a deleted key vault or secret can be purged at once, by mistake or by an attacker. Add --enable-purge-protection true.")
+				}
+			case cmd == "acr create":
+				// --admin-enabled may be given with true, or on its own.
+				v, ok := azFlag(args, "--admin-enabled")
+				bare := (ok && strings.HasPrefix(v, "-")) || strings.HasSuffix(strings.TrimSpace(args), "--admin-enabled")
+				if (ok && strings.EqualFold(v, "true")) || bare {
+					add(model.Medium, "Registry admin account is on", "--admin-enabled gives the registry one shared user name and password with full push and pull rights. Leave it out and use Microsoft Entra identities or tokens.")
+				}
+			case cmd == "redis create":
+				if strings.Contains(args, "--enable-non-ssl-port") {
+					add(model.Medium, "Unencrypted traffic is allowed", "--enable-non-ssl-port opens Redis on port 6379 without encryption. Leave it out and connect on the TLS port.")
+				}
+			case cmd == "aks create":
+				if _, limited := azFlag(args, "--api-server-authorized-ip-ranges"); !limited && !strings.Contains(args, "--enable-private-cluster") {
+					add(model.Low, "Kubernetes API is reachable from the internet", "The cluster's API answers on a public address for everyone. Add --api-server-authorized-ip-ranges with your own addresses, or --enable-private-cluster.")
+				}
+				if strings.Contains(args, "--disable-rbac") {
+					add(model.High, "Kubernetes access control is off", "--disable-rbac means everyone who can log in to the cluster can do anything in it. Leave it out.")
+				}
+			case cmd == "role assignment create":
+				if m := azBroadRole.FindStringSubmatch(args); m != nil {
+					add(model.High, "Full control in Azure is handed out", "This gives the "+m[1]+" role, which can change or delete everything in its scope. Give a narrower built-in role, such as Reader or a service-specific role, at the smallest scope that works.")
+				}
+			}
+			if openByDefault {
+				pna, _ := azFlag(args, "--public-network-access")
+				da, _ := azFlag(args, "--default-action")
+				if !strings.EqualFold(pna, "Disabled") && !strings.EqualFold(da, "Deny") && !strings.Contains(args, "--ip-range-filter") && !strings.Contains(args, "--enable-virtual-network true") {
+					add(model.Low, "Open to every network", "The service answers on its public address to every network; only its login or keys protect it. Add --public-network-access Disabled and a private endpoint, or limit it with --default-action Deny and network rules.")
+				}
+			}
+
+			switch c.kind {
 			case "vm":
 				rule, named := azFlag(args, "--nsg-rule")
 				if strings.EqualFold(rule, "none") {
@@ -660,7 +851,7 @@ func (s *scan) awsCLI() {
 			}
 			id := "aws." + c.kind + "." + name
 			s.g.AddNode(&model.Node{ID: id, Name: name, Kind: c.kind, Friendly: c.friendly, Code: "aws " + strings.Join(verb, " "),
-				Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n})
+				Cloud: "aws", Type: "aws " + strings.Join(verb, " "), Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n})
 			if variable != "" {
 				ids[variable] = id
 			}

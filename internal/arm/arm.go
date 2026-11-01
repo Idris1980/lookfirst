@@ -26,54 +26,103 @@ type entry struct {
 }
 
 var catalog = map[string]entry{
-	"microsoft.network/virtualnetworks":                         {"network", "virtual network", model.Network},
-	"microsoft.network/virtualnetworks/subnets":                 {"subnet", "subnet", model.Network},
-	"microsoft.network/networkinterfaces":                       {"nic", "network interface", model.Network},
-	"microsoft.network/publicipaddresses":                       {"publicip", "public IP address", model.Network},
-	"microsoft.network/loadbalancers":                           {"loadbalancer", "load balancer", model.Network},
-	"microsoft.network/applicationgateways":                     {"loadbalancer", "application gateway", model.Network},
-	"microsoft.network/privateendpoints":                        {"nic", "private endpoint", model.Network},
-	"microsoft.network/networksecuritygroups":                   {"shield", "network security group", model.Security},
-	"microsoft.network/networksecuritygroups/securityrules":     {"shield", "security rule", model.Security},
-	"microsoft.network/azurefirewalls":                          {"firewall", "firewall", model.Security},
-	"microsoft.keyvault/vaults":                                 {"key", "key vault", model.Security},
-	"microsoft.keyvault/vaults/secrets":                         {"key", "key vault secret", model.Security},
-	"microsoft.managedidentity/userassignedidentities":          {"identity", "managed identity", model.Security},
-	"microsoft.authorization/roleassignments":                   {"identity", "role assignment", model.Security},
-	"microsoft.compute/virtualmachines":                         {"vm", "virtual machine", model.Compute},
-	"microsoft.containerservice/managedclusters":                {"kubernetes", "Kubernetes cluster", model.Compute},
-	"microsoft.containerinstance/containergroups":               {"container", "container group", model.Compute},
-	"microsoft.app/containerapps":                               {"container", "container app", model.Compute},
-	"microsoft.app/managedenvironments":                         {"plan", "container apps environment", model.Compute},
-	"microsoft.web/serverfarms":                                 {"plan", "App Service plan", model.Compute},
-	"microsoft.web/sites":                                       {"webapp", "web app", model.Compute},
-	"microsoft.storage/storageaccounts":                         {"storage", "storage account", model.Data},
-	"microsoft.storage/storageaccounts/blobservices/containers": {"storage", "storage container", model.Data},
-	"microsoft.sql/servers":                                     {"database", "SQL server", model.Data},
-	"microsoft.sql/servers/databases":                           {"database", "SQL database", model.Data},
-	"microsoft.sql/servers/firewallrules":                       {"firewall", "SQL firewall rule", model.Data},
-	"microsoft.dbforpostgresql/flexibleservers":                 {"database", "PostgreSQL server", model.Data},
-	"microsoft.dbforpostgresql/flexibleservers/firewallrules":   {"firewall", "PostgreSQL firewall rule", model.Data},
-	"microsoft.dbformysql/flexibleservers":                      {"database", "MySQL server", model.Data},
-	"microsoft.documentdb/databaseaccounts":                     {"database", "Cosmos DB account", model.Data},
-	"microsoft.insights/components":                             {"monitor", "Application Insights", model.Other},
-	"microsoft.operationalinsights/workspaces":                  {"monitor", "Log Analytics workspace", model.Other},
-	"microsoft.web/sites/networkconfig":                         {"subnet", "VNet integration", model.Network},
-	"microsoft.web/sites/config":                                {"generic", "app settings", model.Compute},
-	"microsoft.storage/storageaccounts/managementpolicies":      {"storage", "storage lifecycle rules", model.Data},
-	"microsoft.network/privatednszones":                         {"dns", "private DNS zone", model.Network},
-	"microsoft.network/privatednszones/virtualnetworklinks":     {"dns", "DNS zone link to VNet", model.Network},
-	"microsoft.network/privateendpoints/privatednszonegroups":   {"dns", "private endpoint DNS", model.Network},
-	"microsoft.network/dnszones":                                {"dns", "DNS zone", model.Network},
-	"microsoft.relay/namespaces":                                {"relay", "Azure Relay", model.Network},
-	"microsoft.relay/namespaces/hybridconnections":              {"relay", "Relay connection", model.Network},
-	"microsoft.sql/servers/connectionpolicies":                  {"database", "SQL connection policy", model.Data},
-	"microsoft.network/natgateways":                             {"loadbalancer", "NAT gateway", model.Network},
-	"microsoft.network/bastionhosts":                            {"shield", "Azure Bastion", model.Security},
-	"microsoft.containerregistry/registries":                    {"container", "container registry", model.Compute},
-	"microsoft.servicebus/namespaces":                           {"relay", "Service Bus", model.Data},
-	"microsoft.eventhub/namespaces":                             {"relay", "Event Hubs", model.Data},
-	"microsoft.cache/redis":                                     {"database", "Redis cache", model.Data},
+	"microsoft.network/virtualnetworks":                                  {"network", "virtual network", model.Network},
+	"microsoft.network/virtualnetworks/subnets":                          {"subnet", "subnet", model.Network},
+	"microsoft.network/networkinterfaces":                                {"nic", "network interface", model.Network},
+	"microsoft.network/publicipaddresses":                                {"publicip", "public IP address", model.Network},
+	"microsoft.network/loadbalancers":                                    {"loadbalancer", "load balancer", model.Network},
+	"microsoft.network/applicationgateways":                              {"loadbalancer", "application gateway", model.Network},
+	"microsoft.network/privateendpoints":                                 {"nic", "private endpoint", model.Network},
+	"microsoft.network/networksecuritygroups":                            {"shield", "network security group", model.Security},
+	"microsoft.network/networksecuritygroups/securityrules":              {"shield", "security rule", model.Security},
+	"microsoft.network/azurefirewalls":                                   {"firewall", "firewall", model.Security},
+	"microsoft.keyvault/vaults":                                          {"key", "key vault", model.Security},
+	"microsoft.keyvault/vaults/secrets":                                  {"key", "key vault secret", model.Security},
+	"microsoft.managedidentity/userassignedidentities":                   {"identity", "managed identity", model.Security},
+	"microsoft.authorization/roleassignments":                            {"identity", "role assignment", model.Security},
+	"microsoft.compute/virtualmachines":                                  {"vm", "virtual machine", model.Compute},
+	"microsoft.containerservice/managedclusters":                         {"kubernetes", "Kubernetes cluster", model.Compute},
+	"microsoft.containerinstance/containergroups":                        {"container", "container group", model.Compute},
+	"microsoft.app/containerapps":                                        {"container", "container app", model.Compute},
+	"microsoft.app/managedenvironments":                                  {"plan", "container apps environment", model.Compute},
+	"microsoft.web/serverfarms":                                          {"plan", "App Service plan", model.Compute},
+	"microsoft.web/sites":                                                {"webapp", "web app", model.Compute},
+	"microsoft.storage/storageaccounts":                                  {"storage", "storage account", model.Data},
+	"microsoft.storage/storageaccounts/blobservices/containers":          {"storage", "storage container", model.Data},
+	"microsoft.sql/servers":                                              {"database", "SQL server", model.Data},
+	"microsoft.sql/servers/databases":                                    {"database", "SQL database", model.Data},
+	"microsoft.sql/servers/firewallrules":                                {"firewall", "SQL firewall rule", model.Data},
+	"microsoft.dbforpostgresql/flexibleservers":                          {"database", "PostgreSQL server", model.Data},
+	"microsoft.dbforpostgresql/flexibleservers/firewallrules":            {"firewall", "PostgreSQL firewall rule", model.Data},
+	"microsoft.dbformysql/flexibleservers":                               {"database", "MySQL server", model.Data},
+	"microsoft.documentdb/databaseaccounts":                              {"database", "Cosmos DB account", model.Data},
+	"microsoft.insights/components":                                      {"monitor", "Application Insights", model.Other},
+	"microsoft.operationalinsights/workspaces":                           {"monitor", "Log Analytics workspace", model.Other},
+	"microsoft.web/sites/networkconfig":                                  {"subnet", "VNet integration", model.Network},
+	"microsoft.web/sites/config":                                         {"generic", "app settings", model.Compute},
+	"microsoft.storage/storageaccounts/managementpolicies":               {"storage", "storage lifecycle rules", model.Data},
+	"microsoft.network/privatednszones":                                  {"dns", "private DNS zone", model.Network},
+	"microsoft.network/privatednszones/virtualnetworklinks":              {"dns", "DNS zone link to VNet", model.Network},
+	"microsoft.network/privateendpoints/privatednszonegroups":            {"dns", "private endpoint DNS", model.Network},
+	"microsoft.network/dnszones":                                         {"dns", "DNS zone", model.Network},
+	"microsoft.relay/namespaces":                                         {"relay", "Azure Relay", model.Network},
+	"microsoft.relay/namespaces/hybridconnections":                       {"relay", "Relay connection", model.Network},
+	"microsoft.sql/servers/connectionpolicies":                           {"database", "SQL connection policy", model.Data},
+	"microsoft.network/natgateways":                                      {"loadbalancer", "NAT gateway", model.Network},
+	"microsoft.network/bastionhosts":                                     {"shield", "Azure Bastion", model.Security},
+	"microsoft.containerregistry/registries":                             {"container", "container registry", model.Compute},
+	"microsoft.servicebus/namespaces":                                    {"relay", "Service Bus", model.Data},
+	"microsoft.eventhub/namespaces":                                      {"relay", "Event Hubs", model.Data},
+	"microsoft.cache/redis":                                              {"database", "Redis cache", model.Data},
+	"microsoft.cache/redisenterprise":                                    {"database", "Redis Enterprise", model.Data},
+	"microsoft.network/frontdoors":                                       {"globe", "Front Door", model.Network},
+	"microsoft.cdn/profiles":                                             {"globe", "Front Door / CDN profile", model.Network},
+	"microsoft.cdn/profiles/afdendpoints":                                {"globe", "Front Door endpoint", model.Network},
+	"microsoft.network/trafficmanagerprofiles":                           {"globe", "Traffic Manager", model.Network},
+	"microsoft.network/virtualnetworkgateways":                           {"network", "VPN gateway", model.Network},
+	"microsoft.network/virtualwans":                                      {"network", "Virtual WAN", model.Network},
+	"microsoft.network/virtualhubs":                                      {"network", "virtual hub", model.Network},
+	"microsoft.network/virtualnetworks/virtualnetworkpeerings":           {"network", "VNet peering", model.Network},
+	"microsoft.network/routetables":                                      {"network", "route table", model.Network},
+	"microsoft.network/ddosprotectionplans":                              {"shield", "DDoS protection", model.Security},
+	"microsoft.network/firewallpolicies":                                 {"firewall", "firewall policy", model.Security},
+	"microsoft.network/applicationgatewaywebapplicationfirewallpolicies": {"firewall", "web application firewall", model.Security},
+	"microsoft.network/applicationsecuritygroups":                        {"shield", "application security group", model.Security},
+	"microsoft.keyvault/vaults/keys":                                     {"key", "key vault key", model.Security},
+	"microsoft.keyvault/managedhsms":                                     {"key", "managed HSM", model.Security},
+	"microsoft.authorization/roledefinitions":                            {"identity", "custom role", model.Security},
+	"microsoft.authorization/policyassignments":                          {"shield", "Azure Policy assignment", model.Security},
+	"microsoft.compute/virtualmachinescalesets":                          {"vm", "VM scale set", model.Compute},
+	"microsoft.compute/disks":                                            {"storage", "managed disk", model.Data},
+	"microsoft.compute/availabilitysets":                                 {"vm", "availability set", model.Compute},
+	"microsoft.compute/virtualmachines/extensions":                       {"terminal", "VM extension", model.Compute},
+	"microsoft.web/staticsites":                                          {"webapp", "Static Web App", model.Compute},
+	"microsoft.web/sites/slots":                                          {"webapp", "deployment slot", model.Compute},
+	"microsoft.app/jobs":                                                 {"container", "container app job", model.Compute},
+	"microsoft.batch/batchaccounts":                                      {"vm", "Batch account", model.Compute},
+	"microsoft.logic/workflows":                                          {"function", "Logic App", model.Compute},
+	"microsoft.apimanagement/service":                                    {"webapp", "API Management", model.Network},
+	"microsoft.signalrservice/signalr":                                   {"relay", "SignalR", model.Network},
+	"microsoft.machinelearningservices/workspaces":                       {"function", "Machine Learning workspace", model.Compute},
+	"microsoft.cognitiveservices/accounts":                               {"function", "Azure AI services", model.Compute},
+	"microsoft.search/searchservices":                                    {"database", "Azure AI Search", model.Data},
+	"microsoft.storage/storageaccounts/fileservices/shares":              {"storage", "file share", model.Data},
+	"microsoft.storage/storageaccounts/queueservices/queues":             {"relay", "storage queue", model.Data},
+	"microsoft.storage/storageaccounts/tableservices/tables":             {"database", "storage table", model.Data},
+	"microsoft.documentdb/databaseaccounts/sqldatabases":                 {"database", "Cosmos DB database", model.Data},
+	"microsoft.dbforpostgresql/flexibleservers/databases":                {"database", "PostgreSQL database", model.Data},
+	"microsoft.dbformysql/flexibleservers/databases":                     {"database", "MySQL database", model.Data},
+	"microsoft.dbformysql/flexibleservers/firewallrules":                 {"firewall", "MySQL firewall rule", model.Data},
+	"microsoft.sql/managedinstances":                                     {"database", "SQL Managed Instance", model.Data},
+	"microsoft.synapse/workspaces":                                       {"database", "Synapse workspace", model.Data},
+	"microsoft.datafactory/factories":                                    {"relay", "Data Factory", model.Data},
+	"microsoft.eventgrid/topics":                                         {"relay", "Event Grid topic", model.Data},
+	"microsoft.servicebus/namespaces/queues":                             {"relay", "Service Bus queue", model.Data},
+	"microsoft.eventhub/namespaces/eventhubs":                            {"relay", "event hub", model.Data},
+	"microsoft.recoveryservices/vaults":                                  {"storage", "backup vault", model.Data},
+	"microsoft.insights/actiongroups":                                    {"monitor", "alert action group", model.Other},
+	"microsoft.insights/metricalerts":                                    {"monitor", "metric alert", model.Other},
+	"microsoft.security/pricings":                                        {"shield", "Defender for Cloud plan", model.Security},
 }
 
 var hidden = map[string]bool{
@@ -82,14 +131,21 @@ var hidden = map[string]bool{
 	"microsoft.resources/resourcegroups":                   true,
 	"microsoft.insights/diagnosticsettings":                true,
 	"microsoft.network/networkinterfaces/ipconfigurations": true,
+	// Settings of another resource, read for risks but not drawn.
+	"microsoft.sql/servers/databases/transparentdataencryption": true,
+	"microsoft.web/sites/config":                                true,
 }
 
 func lookup(t string) entry {
 	if e, ok := catalog[strings.ToLower(t)]; ok {
 		return e
 	}
-	parts := strings.Split(t, "/")
-	return entry{"generic", strings.ToLower(parts[len(parts)-1]), model.Other}
+	// "Microsoft.Kusto/clusters" -> "Kusto clusters": every type is drawn,
+	// with the service it belongs to in its name.
+	provider, rest, _ := strings.Cut(t, "/")
+	parts := strings.Split(rest, "/")
+	name := strings.TrimPrefix(provider, "Microsoft.")
+	return entry{"generic", strings.TrimSpace(name + " " + parts[len(parts)-1]), model.Other}
 }
 
 type template struct {
@@ -208,7 +264,7 @@ func (r *reader) read(bicep bool) {
 		}
 		r.g.AddNode(&model.Node{
 			ID: id(it.typ, it.name), Name: name, Kind: e.kind, Friendly: e.friendly, Code: code,
-			Category: e.category, File: r.file, Line: it.line,
+			Cloud: "azure", Type: it.typ, Category: e.category, File: r.file, Line: it.line,
 		})
 	}
 	for _, it := range r.items {
@@ -410,6 +466,72 @@ func (r *reader) rules(it *item) {
 			g.Add(model.Medium, me, "Password login is allowed",
 				"Passwords can be guessed. Use SSH keys only by setting disablePasswordAuthentication to true.", r.file, r.lineAfter("disablePasswordAuthentication", line))
 		}
+
+	case "microsoft.web/sites":
+		// App Service accepts plain HTTP unless httpsOnly is set.
+		switch p["httpsOnly"] {
+		case false:
+			g.Add(model.Medium, me, "No HTTPS",
+				"httpsOnly: false lets the app answer on plain HTTP. Set httpsOnly: true.", r.file, r.lineAfter("httpsOnly", line))
+		case nil:
+			g.Add(model.Low, me, "No HTTPS",
+				"httpsOnly is not set, and Azure's default is to answer on plain HTTP too. Set httpsOnly: true.", r.file, line)
+		}
+		site := mapOf(p["siteConfig"])
+		if v := str(site["ftpsState"]); strings.EqualFold(v, "AllAllowed") {
+			g.Add(model.Medium, me, "Files can be uploaded over unencrypted FTP",
+				"ftpsState: AllAllowed lets anyone with the deployment password upload files over plain FTP, where the password can be read on the way. Use FtpsOnly, or Disabled.", r.file, r.lineAfter("ftpsState", line))
+		}
+		if site["remoteDebuggingEnabled"] == true {
+			g.Add(model.Medium, me, "Remote debugging is on",
+				"remoteDebuggingEnabled opens a debugging port on the app. Turn it off outside short debugging sessions.", r.file, r.lineAfter("remoteDebuggingEnabled", line))
+		}
+		if v := str(site["minTlsVersion"]); v == "1.0" || v == "1.1" {
+			g.Add(model.Medium, me, "Old TLS version allowed",
+				fmt.Sprintf("minTlsVersion = %q allows encryption that is no longer considered safe. Use 1.2 or newer.", v), r.file, r.lineAfter("minTlsVersion", line))
+		}
+	case "microsoft.keyvault/vaults":
+		if p["enablePurgeProtection"] != true {
+			g.Add(model.Low, me, "Deleted secrets can be lost for good",
+				"Without purge protection, a deleted key vault or secret can be purged at once, by mistake or by an attacker. Set enablePurgeProtection: true.", r.file, r.lineAfter("enablePurgeProtection", line))
+		}
+		r.networkAccess(me, p, line)
+	// SQL, PostgreSQL and MySQL are left out: their firewall lets nobody in
+	// until a rule is added, and those rules are checked on their own.
+	case "microsoft.documentdb/databaseaccounts", "microsoft.containerregistry/registries", "microsoft.cache/redis",
+		"microsoft.servicebus/namespaces", "microsoft.eventhub/namespaces", "microsoft.cognitiveservices/accounts", "microsoft.search/searchservices":
+		r.networkAccess(me, p, line)
+		if strings.EqualFold(it.typ, "microsoft.containerregistry/registries") && p["adminUserEnabled"] == true {
+			g.Add(model.Medium, me, "Registry admin account is on",
+				"adminUserEnabled gives the registry one shared user name and password with full push and pull rights. Turn it off and use Microsoft Entra identities or tokens.", r.file, r.lineAfter("adminUserEnabled", line))
+		}
+		if strings.EqualFold(it.typ, "microsoft.cache/redis") && p["enableNonSslPort"] == true {
+			g.Add(model.Medium, me, "Unencrypted traffic is allowed",
+				"enableNonSslPort opens Redis on port 6379 without encryption. Set it to false and connect on the TLS port.", r.file, r.lineAfter("enableNonSslPort", line))
+		}
+	case "microsoft.containerservice/managedclusters":
+		api := mapOf(p["apiServerAccessProfile"])
+		if api["enablePrivateCluster"] != true && len(list(api["authorizedIPRanges"])) == 0 {
+			g.Add(model.Low, me, "Kubernetes API is reachable from the internet",
+				"The cluster's API answers on a public address for everyone. Set apiServerAccessProfile.authorizedIPRanges to your own addresses, or make it a private cluster.", r.file, line)
+		}
+		if p["enableRBAC"] == false {
+			g.Add(model.High, me, "Kubernetes access control is off",
+				"enableRBAC: false means everyone who can reach the cluster API with any valid login can do anything in the cluster. Set it to true.", r.file, r.lineAfter("enableRBAC", line))
+		}
+	case "microsoft.authorization/roleassignments":
+		if role, ok := broadRole(str(p["roleDefinitionId"])); ok {
+			g.Add(model.High, me, "Full control in Azure is handed out",
+				fmt.Sprintf("This gives the %s role, which can change or delete everything in its scope. Give a narrower built-in role, such as Reader or a service-specific role.", role), r.file, r.lineAfter("roleDefinitionId", line))
+		}
+	case "microsoft.sql/servers/databases/transparentdataencryption":
+		if strings.EqualFold(str(p["state"]), "Disabled") {
+			g.Add(model.Medium, me, "Data is not encrypted",
+				"Transparent data encryption is turned off, so the database files and backups are not encrypted. Set state: Enabled.", r.file, r.lineAfter("state", line))
+		}
+	}
+	if strings.EqualFold(it.typ, "microsoft.storage/storageaccounts") {
+		r.networkAccess(me, p, line)
 	}
 
 	for _, key := range []string{"minimumTlsVersion", "minimalTlsVersion", "minTlsVersion"} {
@@ -423,6 +545,42 @@ func (r *reader) rules(it *item) {
 			risk.CheckSecret(g, me, key, s, r.file, r.lineAfter(key, line), secretFix)
 		}
 	})
+}
+
+// networkAccess reports a service that answers on its public address to
+// every network: public network access is on (the default) and no firewall
+// rule or private endpoint narrows it down.
+func (r *reader) networkAccess(me string, p map[string]any, line int) {
+	if strings.EqualFold(str(p["publicNetworkAccess"]), "Disabled") {
+		return
+	}
+	acls := mapOf(p["networkAcls"])
+	if acls == nil {
+		acls = mapOf(p["networkRuleSet"])
+	}
+	if strings.EqualFold(str(acls["defaultAction"]), "Deny") || len(list(p["ipRules"])) > 0 || p["isVirtualNetworkFilterEnabled"] == true {
+		return
+	}
+	r.g.Add(model.Low, me, "Open to every network",
+		"The service answers on its public address to every network; only its login protects it. Restrict it to your own networks (networkAcls with defaultAction: Deny), or set publicNetworkAccess: Disabled and use a private endpoint.", r.file, r.lineAfter("publicNetworkAccess", line))
+}
+
+// broadRoles are the built-in Azure roles that can change everything in
+// their scope, by their fixed ids.
+var broadRoles = map[string]string{
+	"8e3af657-a8ff-443c-a75c-2fe8c4bcb635": "Owner",
+	"b24988ac-6180-42a0-ab88-20f7382dd24c": "Contributor",
+	"18d7d88d-d35e-4fb5-a5c3-7773c20a72d9": "User Access Administrator",
+}
+
+func broadRole(def string) (string, bool) {
+	lower := strings.ToLower(def)
+	for id, name := range broadRoles {
+		if strings.Contains(lower, id) {
+			return name, true
+		}
+	}
+	return "", false
 }
 
 func (r *reader) securityRule(me string, p map[string]any, line int) {

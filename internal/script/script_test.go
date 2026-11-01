@@ -1,6 +1,7 @@
 package script
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -292,6 +293,100 @@ func TestKebab(t *testing.T) {
 		if got := kebab(in); got != want {
 			t.Errorf("kebab(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Azure CLI defaults that open things without the script saying so.
+func TestAzureCLIDefaults(t *testing.T) {
+	sh := "az network nsg create -g rg -n web-nsg\n" +
+		"az network nsg rule create -g rg --nsg-name web-nsg -n ssh --priority 100 --destination-port-ranges 22\n" +
+		"az network nsg rule create -g rg --nsg-name web-nsg -n mine --priority 110 --destination-port-ranges 3389 --source-address-prefixes 203.0.113.10/32\n" +
+		"az webapp create -g rg -p plan -n shop\n" +
+		"az webapp config set -g rg -n shop --ftps-state AllAllowed\n" +
+		"az keyvault create -g rg -n kv-shop\n" +
+		"az acr create -g rg -n acrshop --sku Basic --admin-enabled true\n" +
+		"az role assignment create --assignee x --role Owner --scope /subscriptions/1\n" +
+		"az search service create -g rg -n find --sku basic\n"
+	g := Read([]source.File{{Path: "env.sh", Kind: source.Shell, Data: []byte(sh)}})
+	got := map[string][]int{}
+	for _, f := range g.Findings {
+		got[f.Title] = append(got[f.Title], f.Line)
+	}
+	want := map[string][]int{
+		"SSH (port 22) is open to the internet":      {2},
+		"No HTTPS":                                   {4},
+		"Files can be uploaded over unencrypted FTP": {5},
+		"Deleted secrets can be lost for good":       {6},
+		"Registry admin account is on":               {7},
+		"Full control in Azure is handed out":        {8},
+	}
+	for title, lines := range want {
+		if !reflect.DeepEqual(got[title], lines) {
+			t.Errorf("%q on lines %v, want %v", title, got[title], lines)
+		}
+	}
+	if got["Remote Desktop (RDP) (port 3389) is open to the internet"] != nil {
+		t.Error("a rule limited to one address is not open to the internet")
+	}
+	for _, id := range []string{"azure.shield.web-nsg", "azure.webapp.shop", "azure.generic.find"} {
+		if g.Node(id) == nil {
+			t.Errorf("the picture is missing %q", id)
+		}
+	}
+}
+
+// Azure PowerShell, including Microsoft's own example of an NSG rule
+// that lets everyone in on RDP, and New-AzVM's default ports.
+func TestAzPowerShell(t *testing.T) {
+	ps := `$vmName = "web01"
+$vnet = New-AzVirtualNetwork -Name vnet -ResourceGroupName rg -Location sweden -AddressPrefix 10.0.0.0/16
+$rdp = New-AzNetworkSecurityRuleConfig -Name RDP -Protocol Tcp -Direction Inbound -Priority 1001 -SourceAddressPrefix * -SourcePortRange * -DestinationAddressPrefix * -DestinationPortRange 3389 -Access Allow
+$nsg = New-AzNetworkSecurityGroup -ResourceGroupName rg -Location sweden -Name web-nsg -SecurityRules $rdp
+$nic = New-AzNetworkInterface -Name nic1 -ResourceGroupName rg -Location sweden -SubnetId $vnet.Subnets[0].Id -NetworkSecurityGroupId $nsg.Id
+$cred = New-Object PSCredential ("azureuser", (ConvertTo-SecureString "Sup3rS3cret!2026" -AsPlainText -Force))
+New-AzVM -ResourceGroupName rg -Name $vmName -Location sweden
+New-AzStorageAccount -ResourceGroupName rg -Name stshop -SkuName Standard_LRS -Location sweden -AllowBlobPublicAccess $true
+New-AzSqlServerFirewallRule -ResourceGroupName rg -ServerName sql1 -FirewallRuleName all -StartIpAddress 0.0.0.0 -EndIpAddress 255.255.255.255
+New-AzRoleAssignment -ObjectId x -RoleDefinitionName Contributor -Scope /subscriptions/1
+`
+	g := Read([]source.File{{Path: "build.ps1", Kind: source.PowerShell, Data: []byte(ps)}})
+	got := map[string][]string{}
+	for _, f := range g.Findings {
+		got[f.Title] = append(got[f.Title], fmt.Sprintf("%s:%d", f.NodeID, f.Line))
+	}
+	want := map[string]string{
+		"Remote Desktop (RDP) (port 3389) is open to the internet": "azure.shield.web-nsg:3",
+		"Ports are opened without being named":                     "azure.vm.web01:7",
+		"Files can be made public":                                 "azure.storage.stshop:8",
+		"Database open to the whole internet":                      "script.build.ps1:9",
+		"Full control in Azure is handed out":                      "azure.identity.$generic:10",
+		"Password or key written in the code":                      "script.build.ps1:6",
+	}
+	for title, where := range want {
+		found := false
+		for _, w := range got[title] {
+			found = found || w == where || (strings.HasPrefix(where, "azure.identity") && strings.HasSuffix(w, ":10"))
+		}
+		if !found {
+			t.Errorf("%q: got %v, want %s", title, got[title], where)
+		}
+	}
+	// New-AzVM without -OpenPorts opens RDP and WinRM on a Windows image.
+	vmPorts := 0
+	for _, f := range g.Findings {
+		if f.NodeID == "azure.vm.web01" && strings.HasSuffix(f.Title, "is open to the internet") {
+			vmPorts++
+		}
+	}
+	if vmPorts != 2 {
+		t.Errorf("New-AzVM's default ports: %d findings, want 2 (3389 and 5985)", vmPorts)
+	}
+	linked := false
+	for _, e := range g.Edges {
+		linked = linked || (e.From == "azure.nic.nic1" && e.To == "azure.shield.web-nsg")
+	}
+	if !linked {
+		t.Errorf("no line from the network interface to its NSG: %v", g.Edges)
 	}
 }
 

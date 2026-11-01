@@ -65,6 +65,7 @@ svg { display: block; font-family: inherit; }
 .box.high { stroke: var(--high); stroke-width: 2.5; }
 .box.medium { stroke: var(--medium); stroke-width: 2; }
 .iconbg { opacity: .14; }
+.officialbg { fill: var(--bg); }
 .icon { fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .name { font-size: 13px; font-weight: 600; fill: var(--text); }
 .friendly { font-size: 11px; fill: var(--muted); }
@@ -93,6 +94,23 @@ a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width
 .chips.small { margin-top: 0; }
 .chip.none { background: var(--bg); color: var(--muted); font-weight: 500; }
 .project { scroll-margin-top: 16px; }
+details.advice { margin-top: 8px; }
+details.advice summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--c-network); }
+details.advice h3 { font-size: 13px; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+details.advice p, details.advice ol, details.advice ul { margin: 0 0 6px; }
+details.advice ol, details.advice ul { padding-left: 20px; }
+.refs a { color: var(--c-network); }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+details.inventory > summary { cursor: pointer; list-style-position: outside; }
+details.inventory > summary h2 { display: inline; }
+.inventory h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 18px 0 6px; }
+.inventory table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.inventory th { text-align: left; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--line); padding: 6px 8px; }
+.inventory td { border-bottom: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+.inventory a { color: inherit; }
+.iname { font-weight: 600; }
+.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; }
+.notread ul { margin: 0; padding-left: 20px; color: var(--muted); }
 .projectname { font-size: 18px; margin: 32px 0 12px; font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
 </style>
 </head>
@@ -148,6 +166,7 @@ a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width
         <defs>
           <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0L10 5L0 10z"/></marker>
           <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow risky" d="M0 0L10 5L0 10z"/></marker>
+          {{.Symbols}}
         </defs>
         {{range .Cols}}<text class="coltitle" x="{{.X}}" y="28">{{.Title}}</text>{{end}}
         {{range .Edges}}<path class="edge{{if .Risky}} risky{{end}}" d="{{.D}}" marker-end="{{if .Risky}}url(#ar){{else}}url(#a){{end}}"/>{{end}}
@@ -157,8 +176,13 @@ a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width
         <g class="{{.Cat}}">
           <title>{{.Tooltip}}</title>
           <rect class="box{{if .Sev}} {{.Sev}}{{end}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/>
+          {{if .Official}}
+          <rect class="officialbg" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" rx="8"/>
+          <svg x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" viewBox="0 0 44 60"><use href="#ic-{{.Official}}" x="7" y="15" width="30" height="30"/></svg>
+          {{else}}
           <rect class="iconbg" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" rx="8" fill="currentColor"/>
           <svg class="icon" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" viewBox="-10 -12 44 48" stroke="currentColor">{{.Icon}}</svg>
+          {{end}}
           <text class="name" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}20{{else}}25{{end}}">{{.Name}}</text>
           <text class="friendly" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}35{{else}}41{{end}}">{{.Friendly}}</text>
           {{if .Code}}<text class="code" x="{{.X}}" y="{{.Y}}" dx="53" dy="49">{{.Code}}</text>{{end}}
@@ -180,6 +204,17 @@ a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width
         <div><span class="sev {{.Sev}}">{{.Sev}}</span><span class="ftitle">{{.Title}}</span></div>
         <p class="fdetail">{{.Detail}}</p>
         <div class="where">{{if .Href}}<a href="{{.Href}}" title="Open in the code">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if .Node}} · {{.Node}}{{end}}{{if .Explain}} · <a class="ai" href="{{.Explain}}" title="Shows you what would be sent before anything is sent">Explain and fix with AI</a>{{end}}</div>
+        {{if .Story}}
+        <details class="advice">
+          <summary>Why it matters and how to fix it</summary>
+          <h3>What could happen</h3>
+          <p>{{.Story}}</p>
+          <h3>How to fix it</h3>
+          <ol>{{range .Fix}}<li>{{.}}</li>{{end}}</ol>
+          {{if .Refs}}<h3>Official guidance</h3>
+          <ul class="refs">{{range .Refs}}<li><a href="{{.URL}}" target="_blank" rel="noopener noreferrer">{{.Label}}</a></li>{{end}}</ul>{{end}}
+        </details>
+        {{end}}
       </li>
       {{end}}
     </ul>
@@ -187,6 +222,38 @@ a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width
     <p>No known risks in what we checked.</p>
     {{end}}
   </section>
+
+  {{if .Inventory}}
+  <section class="card">
+    <details class="inventory"{{if le .Total 40}} open{{end}}>
+      <summary><h2>Everything this code creates or touches ({{.Total}})</h2></summary>
+      <p class="hint">The full list, before anything runs. Nothing is left out here, also when the picture folds long columns.</p>
+      {{range .Inventory}}
+      <h3>{{.Title}}</h3>
+      <table>
+        <thead><tr><th>Name</th><th>What it is</th><th>Type in the code</th><th>Where</th><th>Risks</th></tr></thead>
+        <tbody>
+        {{range .Items}}
+          <tr>
+            <td class="iname">{{.Name}}</td><td>{{.What}}</td><td class="mono">{{.Type}}</td>
+            <td class="mono">{{if .Href}}<a href="{{.Href}}">{{.Where}}</a>{{else}}{{.Where}}{{end}}</td>
+            <td>{{if .Sev}}<span class="chip {{.Sev}}">{{.Count}} · {{.Sev}}</span>{{else}}<span class="chip none">none found</span>{{end}}</td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      {{end}}
+    </details>
+  </section>
+  {{end}}
+
+  {{if .NotRead}}
+  <section class="card notread">
+    <h2>Files LookFirst did not read ({{len .NotRead}})</h2>
+    <p class="hint">These files are in the folder but are of a kind LookFirst cannot read yet. They are not in the picture or the findings, so check them yourself before you run anything.</p>
+    <ul class="mono">{{range .NotRead}}<li>{{.}}</li>{{end}}</ul>
+  </section>
+  {{end}}
   </div>
   {{end}}
 

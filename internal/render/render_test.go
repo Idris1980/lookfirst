@@ -2,6 +2,8 @@ package render
 
 import (
 	"bytes"
+	"encoding/xml"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -34,6 +36,62 @@ func TestHTMLHasNoScripts(t *testing.T) {
 		if !strings.Contains(out, "default-src 'none'") {
 			t.Error("report lost its Content-Security-Policy")
 		}
+	}
+}
+
+// A name from a malicious file must stay text in the exports too: no Mermaid
+// directives, links or HTML, and valid XML for draw.io.
+func TestExportsAreSafe(t *testing.T) {
+	g := hostile()
+	g.AddNode(&model.Node{ID: "b", Name: "x\"]\n  click a href \"javascript:alert(1)\"\n%%{init: {}}%%", Kind: "vm", Category: model.Data})
+	g.Connect("a", "b", "port 22|<img src=x>", true)
+
+	var m bytes.Buffer
+	if err := Mermaid(&m, []Section{{Name: "evil", Graph: g}}); err != nil {
+		t.Fatal(err)
+	}
+	out := m.String()
+	for _, bad := range []string{"<script", "<img", "\n  click ", "%%{init", `"]` + "\n  click"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("mermaid output contains %q:\n%s", bad, out)
+		}
+	}
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(l), "click") {
+			t.Errorf("a name added a line of its own: %q", l)
+		}
+	}
+
+	var d bytes.Buffer
+	if err := DrawIO(&d, []Section{{Name: "evil", Graph: g}}); err != nil {
+		t.Fatal(err)
+	}
+	var doc struct{ XMLName xml.Name }
+	if err := xml.Unmarshal(d.Bytes(), &doc); err != nil {
+		t.Errorf("draw.io output is not valid XML: %v", err)
+	}
+	if strings.Contains(strings.ToLower(d.String()), "<script") || strings.Contains(d.String(), "html=1") {
+		t.Error("draw.io output may show HTML from the code")
+	}
+}
+
+// Exports hold every box, also when the report folds a long column.
+func TestExportsHoldEveryBox(t *testing.T) {
+	g := &model.Graph{}
+	for i := 0; i < 30; i++ {
+		g.AddNode(&model.Node{ID: fmt.Sprintf("s%d", i), Name: fmt.Sprintf("bucket%d", i), Kind: "storage", Category: model.Data})
+	}
+	var d bytes.Buffer
+	if err := DrawIO(&d, []Section{{Graph: g}}); err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(d.String(), `vertex="1"`) - 1; n != 30 { // one column title
+		t.Errorf("draw.io has %d boxes, want 30", n)
+	}
+	var m bytes.Buffer
+	Mermaid(&m, []Section{{Graph: g}})
+	if strings.Contains(m.String(), "more") || strings.Count(m.String(), "bucket") != 30 {
+		t.Error("mermaid folded boxes")
 	}
 }
 

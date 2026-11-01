@@ -76,7 +76,11 @@ func TestCompareFindsWhatOnlyAzureShows(t *testing.T) {
 			t.Errorf("missing %q; got %v", want, titles)
 		}
 	}
-	if len(code.Findings) != 0 {
-		t.Errorf("the template alone should look clean, got %v", code.Findings)
+	// Low notes, such as the account being open to every network by
+	// default, are fine; the serious risks only show in Azure's answer.
+	for _, f := range code.Findings {
+		if f.Severity != model.Low {
+			t.Errorf("the template alone should have no serious findings, got %v", f)
+		}
 	}
 }

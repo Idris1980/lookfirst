@@ -16,7 +16,8 @@ lookfirst read --format markdown --fail-on high .
 ```
 
 - Without options it prints a summary and writes `lookfirst-report.html` with the picture; `--open` opens it in your browser, `--out` chooses another file name.
-- `--format` is `text` (the default), `json`, `markdown` or `github` (markings for GitHub Actions, see [github-action.md](github-action.md)).
+- `--format` is `text` (the default), `json`, `markdown`, `github` (markings for GitHub Actions, see [github-action.md](github-action.md)), `mermaid` (a diagram that GitHub, GitLab, Notion and Obsidian draw) or `drawio` (a diagrams.net file, which Lucidchart imports and diagrams.net can save as Visio). The exports hold every box, also those the HTML picture folds away.
+- JSON findings carry `cloud` and `advice`: what could happen, how to fix it, and official AWS or Microsoft guidance.
 - `--fail-on high` (or `medium`, `low`) ends with exit code 3 when there is a finding that severe, so a build pipeline can stop.
 - `--changed paths.txt` (one path per line) is for pull requests: the Markdown summary shows the findings in those files first, and `--fail-on` only counts them.
 - `--vscode-links` makes the boxes and findings in the report open the code in VS Code; the extension uses it.

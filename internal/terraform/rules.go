@@ -114,6 +114,7 @@ func check(c *config, g *model.Graph) {
 	}
 
 	awsChecks(c, g)
+	azureChecks(c, g)
 	secrets(c, g)
 }
 

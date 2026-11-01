@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Idris1980/lookfirst/internal/advice"
 	"github.com/Idris1980/lookfirst/internal/explain"
 	"github.com/Idris1980/lookfirst/internal/model"
 )
@@ -42,6 +43,7 @@ type svgNode struct {
 	Name, Friendly string
 	Tooltip        string
 	Icon           template.HTML
+	Official       string // the official Azure or AWS icon, by name, if there is one
 	Code           string
 	Cat, Sev       string
 	Count          int
@@ -65,6 +67,23 @@ type finding struct {
 	Sev, Title, Detail, Where, Node string
 	Href                            template.URL
 	Explain                         template.URL // asks the AI model, in VS Code only
+	// From the advice package: what could happen, how to fix it, and
+	// official guidance for the cloud the finding is about.
+	Story string
+	Fix   []string
+	Refs  []advice.Ref
+}
+
+// item is one thing in the full list of what the code creates.
+type item struct {
+	Name, What, Type, Where, Sev string
+	Href                         template.URL
+	Count                        int
+}
+
+type itemGroup struct {
+	Title string
+	Items []item
 }
 
 // Options change how the report is made.
@@ -118,6 +137,10 @@ type project struct {
 	Edges        []svgEdge
 	Findings     []finding
 	Counts       map[string]int
+	Inventory    []itemGroup // every box, also those folded into "+N more"
+	Total        int
+	NotRead      []string      // files in the folders that LookFirst did not read
+	Symbols      template.HTML // the official icons the picture uses, once each
 }
 
 type page struct {
@@ -168,6 +191,7 @@ func buildProject(s Section, opt Options) project {
 	p := project{Name: s.Name, Summary: explain.Summary(g), Counts: map[string]int{}}
 	l := layout(g)
 	p.Cols, p.W, p.H = l.cols, l.w, l.h
+	var used []string // official icons, for the symbols at the top of the picture
 
 	for _, n := range l.order {
 		pos := l.pos[n.ID]
@@ -175,7 +199,9 @@ func buildProject(s Section, opt Options) project {
 			X: pos.x, Y: pos.y, W: nodeW, H: nodeH,
 			Name: clip(n.Name, 21), Friendly: clip(n.Friendly, 25), Code: clipCode(n.Code, 23),
 			Tooltip: n.Name + "\n" + n.Friendly, Icon: icon(n.Kind), Cat: strings.ToLower(n.Category.String()),
+			Official: cloudIconFor(n),
 		}
+		used = append(used, sn.Official)
 		if n.File != "" {
 			sn.Tooltip += fmt.Sprintf("\n%s:%d", n.File, n.Line)
 		}
@@ -227,10 +253,54 @@ func buildProject(s Section, opt Options) project {
 		if n := g.Node(f.NodeID); n != nil && n.Name != filepath.Base(f.File) {
 			box = n.Name
 		}
-		p.Findings = append(p.Findings, finding{f.Severity.String(), f.Title, f.Detail, where, box, reveal(opt, f.File, f.Line), explainLink(opt, f)})
+		fd := finding{Sev: f.Severity.String(), Title: f.Title, Detail: f.Detail, Where: where, Node: box,
+			Href: reveal(opt, f.File, f.Line), Explain: explainLink(opt, f)}
+		if a, ok := advice.For(f.Title); ok {
+			fd.Story, fd.Fix, fd.Refs = a.Story, a.Fix, a.Refs(g.CloudOf(f))
+		}
+		p.Findings = append(p.Findings, fd)
 		p.Counts[f.Severity.String()]++
 	}
+	p.Inventory, p.Total = inventory(g, opt)
+	p.NotRead = g.NotRead
+	p.Symbols = iconSymbols(used)
 	return p
+}
+
+// inventory lists every box in the picture by column, so nothing is hidden
+// when a long column is folded into "+N more".
+func inventory(g *model.Graph, opt Options) ([]itemGroup, int) {
+	var groups []itemGroup
+	total := 0
+	for _, c := range g.Columns() {
+		var items []item
+		for _, n := range g.Nodes {
+			if n.Category != c || n.ID == model.InternetID {
+				continue
+			}
+			it := item{Name: n.Name, What: n.Friendly, Type: n.Type, Href: reveal(opt, n.File, n.Line)}
+			if it.Type == "" {
+				it.Type = n.Code
+			}
+			if n.File != "" {
+				it.Where = fmt.Sprintf("%s:%d", n.File, n.Line)
+			}
+			if sev, ok := g.Worst(n.ID); ok {
+				it.Sev = sev.String()
+				for _, f := range g.Findings {
+					if f.NodeID == n.ID {
+						it.Count++
+					}
+				}
+			}
+			items = append(items, it)
+		}
+		if len(items) > 0 {
+			groups = append(groups, itemGroup{Title: g.Title(c), Items: items})
+			total += len(items)
+		}
+	}
+	return groups, total
 }
 
 type place struct{ x, y, col, row int }
@@ -245,7 +315,11 @@ type laidOut struct {
 
 // layout puts each category in a column, folds long columns, and orders
 // each column so lines cross as little as possible.
-func layout(g *model.Graph) laidOut {
+func layout(g *model.Graph) laidOut { return layoutRows(g, maxRows) }
+
+// layoutRows is layout with another limit before a column is folded; 0
+// never folds, for exports that must hold every box.
+func layoutRows(g *model.Graph, rowsMax int) laidOut {
 	columns := map[model.Category][]*model.Node{}
 	for _, n := range g.Nodes {
 		columns[n.Category] = append(columns[n.Category], n)
@@ -254,7 +328,7 @@ func layout(g *model.Graph) laidOut {
 	// Fold long columns, keeping the boxes with findings.
 	redirect := map[string]string{}
 	for c, nodes := range columns {
-		if len(nodes) <= maxRows {
+		if rowsMax == 0 || len(nodes) <= rowsMax {
 			continue
 		}
 		sort.SliceStable(nodes, func(i, j int) bool {
@@ -262,7 +336,7 @@ func layout(g *model.Graph) laidOut {
 			_, fj := g.Worst(nodes[j].ID)
 			return fi && !fj
 		})
-		keep, rest := nodes[:maxRows-1], nodes[maxRows-1:]
+		keep, rest := nodes[:rowsMax-1], nodes[rowsMax-1:]
 		more := &model.Node{
 			ID: "more." + c.String(), Name: fmt.Sprintf("+%d more", len(rest)), Kind: "generic",
 			Friendly: "listed in the findings", Category: c,

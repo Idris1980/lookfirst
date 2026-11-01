@@ -1,6 +1,8 @@
 package terraform
 
 import (
+	"strings"
+
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
@@ -25,9 +27,16 @@ func build(c *config) *model.Graph {
 		} else if n, ok := str(r.body, "bucket"); ok && n != "" {
 			name = n
 		}
+		cloud := ""
+		switch {
+		case strings.HasPrefix(r.typ, "aws_"):
+			cloud = "aws"
+		case strings.HasPrefix(r.typ, "azurerm_") || strings.HasPrefix(r.typ, "azapi_"):
+			cloud = "azure"
+		}
 		g.Nodes = append(g.Nodes, &model.Node{
 			ID: r.id(), Name: name, Kind: e.kind, Friendly: e.friendly, Code: r.id(),
-			Category: e.category, File: r.file, Line: r.line,
+			Cloud: cloud, Type: r.typ, Category: e.category, File: r.file, Line: r.line,
 		})
 	}
 

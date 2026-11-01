@@ -69,7 +69,7 @@ func readFile(g *model.Graph, f source.File) {
 		res.drawn = true
 		g.AddNode(&model.Node{
 			ID: id(res.name), Name: res.name, Kind: e.kind, Friendly: e.friendly, Code: res.name + ": " + res.typ,
-			Category: e.category, File: f.Path, Line: res.key.Line,
+			Cloud: "aws", Type: res.typ, Category: e.category, File: f.Path, Line: res.key.Line,
 		})
 	}
 	// A line for every reference (!Ref, !GetAtt, !Sub, DependsOn) between

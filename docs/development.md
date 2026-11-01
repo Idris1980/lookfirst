@@ -19,10 +19,11 @@ node --test "vscode/test/*.test.js"
 - `internal/terraform`, `arm`, `cloudformation`, `compose`, `kubernetes`, `script` – one reader per kind of code
 - `internal/risk` – rules shared by all readers: ports, secrets, placeholders, masking
 - `internal/analyze` – runs the readers and groups the results per folder
-- `internal/render` – the report (HTML), text, JSON, Markdown and GitHub output
+- `internal/render` – the report (HTML), text, JSON, Markdown, GitHub, Mermaid and draw.io output; `cloudicons/` holds the official Azure and AWS icons (see its NOTICE)
+- `internal/advice` – what each finding means, how to fix it, and the AWS Security Hub and Microsoft cloud security benchmark controls behind it; `LOOKFIRST_PRINT_REFS=1 go test ./internal/advice -run TestPrintRefs -v` lists every link for checking
 - `internal/azuretry`, `awstry` – compare a template with Azure's or AWS's answer
 - `vscode/` – the extension; `site/` – the web page; `action.yml` – the GitHub Action
 
 ## Releases
 
-Pushing a tag such as `v0.13.0` (matching `vscode/package.json`) builds, signs and publishes a release through `.github/workflows/release.yml`.
+Pushing a tag such as `v0.14.0` (matching `vscode/package.json`) builds, signs and publishes a release through `.github/workflows/release.yml`.

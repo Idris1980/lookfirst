@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Idris1980/lookfirst/internal/advice"
 	"github.com/Idris1980/lookfirst/internal/explain"
 	"github.com/Idris1980/lookfirst/internal/model"
 )
@@ -40,8 +41,9 @@ func Markdown(w io.Writer, sections []Section, changed map[string]bool) {
 		} else {
 			c := counts(mine)
 			fmt.Fprintf(w, "**%d high · %d medium · %d low** in the changed files.\n\n", c["high"], c["medium"], c["low"])
-			table(w, mine, maxCommentRows)
+			table(w, all, mine, maxCommentRows)
 		}
+		picture(w, sections)
 		c := counts(all.Findings)
 		fmt.Fprintf(w, "<details><summary>Everything that was read: %d high · %d medium · %d low</summary>\n\n", c["high"], c["medium"], c["low"])
 		for _, s := range sections {
@@ -74,18 +76,42 @@ func Markdown(w io.Writer, sections []Section, changed map[string]bool) {
 		}
 		fmt.Fprintln(w)
 		if len(s.Graph.Findings) > 0 && rows < maxCommentRows {
-			rows += table(w, s.Graph.Findings, maxCommentRows-rows)
+			rows += table(w, s.Graph, s.Graph.Findings, maxCommentRows-rows)
 		}
 	}
 	if total := len(all.Findings); total > rows {
 		fmt.Fprintf(w, "…and %d more. The full report is attached to the run.\n\n", total-rows)
 	}
+	picture(w, sections)
 	fmt.Fprintf(w, "<sub>%s</sub>\n", md(explain.Disclaimer))
 }
 
+// maxPictureBoxes keeps the Mermaid picture readable and the comment under
+// GitHub's size limit; larger pictures are in the attached report.
+const maxPictureBoxes = 80
+
+// picture adds the diagram as Mermaid, which GitHub draws, folded away so
+// the findings come first.
+func picture(w io.Writer, sections []Section) {
+	boxes := 0
+	for _, s := range sections {
+		boxes += len(s.Graph.Nodes)
+	}
+	if boxes == 0 {
+		return
+	}
+	if boxes > maxPictureBoxes {
+		fmt.Fprintf(w, "<details><summary>Picture</summary>\n\n%d things are too many to draw here; the full picture is in the report attached to the run.\n\n</details>\n\n", boxes)
+		return
+	}
+	fmt.Fprintf(w, "<details><summary>Picture of what this code builds</summary>\n\n```mermaid\n")
+	Mermaid(w, sections)
+	fmt.Fprintf(w, "```\n\n</details>\n\n")
+}
+
 // table writes up to max findings as a Markdown table and returns how many
-// rows it wrote.
-func table(w io.Writer, findings []model.Finding, max int) int {
+// rows it wrote. Each finding links to official guidance on how to fix it.
+func table(w io.Writer, g *model.Graph, findings []model.Finding, max int) int {
 	fmt.Fprintf(w, "| | Finding | Where |\n| --- | --- | --- |\n")
 	n := 0
 	for _, f := range findings {
@@ -97,7 +123,14 @@ func table(w io.Writer, findings []model.Finding, max int) int {
 		if f.Line > 0 {
 			where = fmt.Sprintf("%s:%d", where, f.Line)
 		}
-		fmt.Fprintf(w, "| %s | **%s**<br>%s | `%s` |\n", badge[f.Severity], md(f.Title), md(f.Detail), strings.ReplaceAll(where, "`", "'"))
+		guide := ""
+		if a, ok := advice.For(f.Title); ok {
+			if refs := a.Refs(g.CloudOf(f)); len(refs) > 0 {
+				// The link is LookFirst's own, never text from the code.
+				guide = fmt.Sprintf("<br>[How to fix: %s](%s)", md(refs[0].Label), refs[0].URL)
+			}
+		}
+		fmt.Fprintf(w, "| %s | **%s**<br>%s%s | `%s` |\n", badge[f.Severity], md(f.Title), md(f.Detail), guide, strings.ReplaceAll(where, "`", "'"))
 	}
 	if len(findings) > n {
 		fmt.Fprintf(w, "| | …and %d more | |\n", len(findings)-n)

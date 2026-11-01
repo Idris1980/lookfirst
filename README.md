@@ -36,6 +36,14 @@ In VS Code, LookFirst checks your files while you work, and can ask an AI to exp
 - **Look at the bottom bar.** The shield shows how it went: red with *high* means something serious, yellow with *medium* means something worth a look, *no known risks* means LookFirst found nothing.
 - **Look for squiggly lines.** Every problem is underlined in the code. Hover over it to read what is wrong and how to fix it. All problems are also listed under **Problems** (`Ctrl+Shift+M`).
 - **See the picture.** Right-click the file, or a whole folder, and choose **Show in LookFirst**. Click a box in the picture, or a problem in the list, to jump to that line. A folder with several projects gets one picture per project, with the riskiest first.
+- **Read why it matters.** Under every problem, *Why it matters and how to fix it* tells you what could actually happen, how to fix it step by step, and links to AWS's or Microsoft's own security guidance for it. In the Problems list, *how to fix* opens the same guidance.
+- **Take the picture with you.** Right-click a file or folder and choose **Export the Picture** to save it for draw.io (diagrams.net), which Lucidchart imports and which can be saved as a Visio file, or as Mermaid, which GitHub, GitLab, Notion and Obsidian draw.
+
+## Nothing is missed in silence
+
+Before anything runs, the report lists **everything the code creates or touches**, in every folder and subfolder, also when the picture has to fold a long column. Files that LookFirst cannot read yet are listed too, under *Files LookFirst did not read*, so you know exactly what was not checked.
+
+Things in AWS and Azure are drawn with AWS's and Microsoft's official architecture icons, in layers: network, security, servers and data.
 
 ## Ask the AI to explain a problem
 
@@ -61,9 +69,20 @@ It uses the AI you already have in VS Code, such as GitHub Copilot; **Copilot Fr
 - Antivirus, firewall or security checks being switched off
 - Packages with names that look like misspellings of well-known ones
 - Placeholders someone forgot to fill in, such as `"YOUR_IP_ADDRESS"`
+- Cloud settings that are risky by default, such as Azure web apps that also answer on plain HTTP, `az network nsg rule create` letting everyone in, and `New-AzVM` opening RDP or SSH when no ports are named
+- Too much power handed out: AdministratorAccess, Owner, policies that allow everything
 - Syntax errors
 
-It reads Terraform, Bicep and ARM templates, AWS CloudFormation and SAM templates, docker-compose, Kubernetes, Python, JavaScript and TypeScript, shell scripts, PowerShell, Dockerfiles, `package.json` and `requirements.txt`.
+Each kind of finding is tied to AWS's [Foundational Security Best Practices](https://docs.aws.amazon.com/securityhub/latest/userguide/fsbp-standard.html) or the [Microsoft cloud security benchmark](https://learn.microsoft.com/en-us/security/benchmark/azure/overview), depending on the cloud.
+
+It reads:
+
+| Infrastructure | Cloud scripts | Programs and packages |
+| --- | --- | --- |
+| Terraform (Azure and AWS) | Azure CLI (`az`) | Python, including AWS's boto3 |
+| Bicep and ARM templates | Azure PowerShell (`New-AzVM` …) | JavaScript and TypeScript |
+| AWS CloudFormation and SAM | AWS CLI (`aws`) | Shell scripts and PowerShell |
+| docker-compose and Kubernetes | | Dockerfiles, `package.json`, `requirements.txt` |
 
 ## Is it safe to use?
 
@@ -91,4 +110,4 @@ LookFirst also works outside VS Code:
 
 ## License
 
-MIT
+MIT, except the Azure and AWS icons in `internal/render/cloudicons`, which belong to Microsoft and Amazon Web Services and are used under their terms for architecture diagrams; see [the notice](internal/render/cloudicons/NOTICE.md).

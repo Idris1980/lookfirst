@@ -11,6 +11,10 @@ Copied some code from an AI assistant or a forum and not sure what it does? Look
 - Right-click a file or folder and choose **Show in LookFirst**.
 - Click a box in the picture, or a place in the list of findings, to jump straight to that line in the code.
 - Or just open, save or paste code. LookFirst checks it on its own and warns you if something is serious.
+- Open **Why it matters and how to fix it** under a finding: what could actually happen, the fix step by step, and AWS's or Microsoft's own guidance for it. In the Problems panel, **how to fix** opens the same guidance.
+- Right-click a file or folder and choose **Export the Picture** to save it for draw.io, Lucidchart or Visio (through draw.io), or as Mermaid for GitHub, Notion and Obsidian.
+
+The report also lists everything the code creates, in every subfolder, and the files LookFirst could not read, so nothing is missed in silence. AWS and Azure resources are drawn with the official architecture icons.
 
 ## Explain and fix with AI
 
@@ -60,4 +64,5 @@ LookFirst tells you what it found. It cannot promise that code is safe: code tha
 | `lookFirst.ai.enabled` | `false` | Allow asking the AI model in VS Code. User settings only. |
 | `lookFirst.ai.showBeforeSending` | `true` | Show what will be sent, and ask, every time. User settings only. |
 | `lookFirst.ai.model` | (largest) | Which AI model to ask, by part of its name, such as `gpt-4.1` or `claude`; with Anthropic, `opus` (default), `sonnet`, `haiku`, `fable` or an exact id. User settings only. |
-| `lookFirst.ai.provider` | `vscode` | `vscode` (Copilot or another model in VS Code) or `anthropic` (Claude with your own API key). User settings only. |
+| `lookFirst.ai.provider` | `vscode` | `vscode` (Copilot or another model in VS Code), `claude-code` (Claude through Claude Code and your Claude plan) or `anthropic` (Claude with your own API key). User settings only. |
+| `lookFirst.ai.claudePath` | (found) | The Claude Code program for `claude-code`. User settings only. |

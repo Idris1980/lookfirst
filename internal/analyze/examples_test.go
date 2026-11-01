@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Idris1980/lookfirst/internal/advice"
 	"github.com/Idris1980/lookfirst/internal/model"
 	"github.com/Idris1980/lookfirst/internal/risk"
 	"github.com/Idris1980/lookfirst/internal/source"
@@ -207,6 +208,24 @@ func TestMaskHidesEverySecret(t *testing.T) {
 		if secretTitles[f.Title] {
 			t.Errorf("a secret survived masking in %s:%d: %s", filepath.Base(f.File), f.Line, f.Detail)
 		}
+	}
+}
+
+// TestEveryFindingIsExplained reads every example and requires an
+// explanation, a fix and official guidance for each kind of finding.
+func TestEveryFindingIsExplained(t *testing.T) {
+	projects, err := Paths([]string{filepath.Join("..", "..", "examples")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing := map[string]bool{}
+	for _, f := range Merge(projects).Findings {
+		if _, ok := advice.For(f.Title); !ok {
+			missing[f.Title] = true
+		}
+	}
+	for title := range missing {
+		t.Errorf("no advice for %q", title)
 	}
 }
 

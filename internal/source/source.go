@@ -67,6 +67,52 @@ var skipDirs = map[string]bool{
 // directly must be a kind we know; inside folders, other files are ignored.
 // Symbolic links are never followed.
 func Collect(paths []string) (files []File, skipped []string, err error) {
+	r, err := CollectAll(paths)
+	return r.Files, r.Skipped, err
+}
+
+// Result is what CollectAll found.
+type Result struct {
+	Files   []File
+	Skipped []string // too large to read
+	// NotRead are files that look like code or configuration but that
+	// LookFirst does not know how to read, so the user can check them.
+	NotRead []string
+}
+
+// CollectAll is Collect, and also lists the files LookFirst did not read.
+func CollectAll(paths []string) (Result, error) {
+	var res Result
+	files, skipped, err := collect(paths, &res.NotRead)
+	res.Files, res.Skipped = files, skipped
+	return res, err
+}
+
+// worthMentioning are kinds of files that hold code or configuration
+// LookFirst cannot read yet: if they are in a folder, the user should know
+// they were not checked.
+var worthMentioning = map[string]bool{
+	".go": true, ".java": true, ".cs": true, ".rb": true, ".php": true, ".rs": true, ".kt": true, ".swift": true,
+	".c": true, ".cpp": true, ".h": true, ".scala": true, ".pl": true, ".lua": true, ".dart": true, ".groovy": true,
+	".bat": true, ".cmd": true, ".vbs": true, ".psd1": true, ".sql": true, ".html": true, ".htm": true, ".vue": true, ".svelte": true,
+	".tfvars": true, ".hcl": true, ".bicepparam": true, ".tpl": true, ".j2": true, ".jinja": true,
+	".toml": true, ".ini": true, ".conf": true, ".cfg": true, ".properties": true, ".xml": true, ".env": true,
+	".json": true, ".yaml": true, ".yml": true,
+}
+
+// notWorthMentioning are well-known files that are not code: lock files and
+// editor or tool settings.
+var notWorthMentioning = regexp.MustCompile(`(?i)^(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|composer\.lock|go\.sum|poetry\.lock|pipfile\.lock|cargo\.lock|tsconfig(\..*)?\.json|jsconfig\.json|\.eslintrc.*|\.prettierrc.*|\.stylelintrc.*|\.babelrc.*|\.markdownlint.*|renovate\.json|\.?codecov\.ya?ml|mkdocs\.ya?ml|\.pre-commit-config\.yaml|launch\.json|settings\.json|extensions\.json|tasks\.json|devcontainer\.json|\.devcontainer\.json|cspell\.json|turbo\.json|lerna\.json|nx\.json|vercel\.json|netlify\.toml|pyproject\.toml|setup\.cfg|tox\.ini|pytest\.ini|\.editorconfig)$`)
+
+func mention(name string) bool {
+	lower := strings.ToLower(name)
+	if notWorthMentioning.MatchString(lower) || strings.HasSuffix(lower, ".min.js") {
+		return false
+	}
+	return worthMentioning[filepath.Ext(lower)] || lower == "makefile" || lower == "jenkinsfile" || lower == "vagrantfile" || lower == ".env"
+}
+
+func collect(paths []string, notRead *[]string) (files []File, skipped []string, err error) {
 	var found []string
 	for _, p := range paths {
 		info, err := os.Lstat(p)
@@ -92,6 +138,8 @@ func Collect(paths []string) (files []File, skipped []string, err error) {
 			}
 			if d.Type()&fs.ModeSymlink == 0 && (guessByName(d.Name()) != "" || shebangCandidate(d.Name())) {
 				found = append(found, path)
+			} else if d.Type()&fs.ModeSymlink == 0 && mention(d.Name()) {
+				*notRead = append(*notRead, path)
 			}
 			if len(found) > MaxFiles {
 				return fmt.Errorf("more than %d files to read; point at a smaller folder", MaxFiles)
@@ -135,6 +183,9 @@ func Collect(paths []string) (files []File, skipped []string, err error) {
 		if f.Kind == "" {
 			if named {
 				return nil, nil, fmt.Errorf("%s: this kind of file is not supported yet", path)
+			}
+			if mention(filepath.Base(path)) {
+				*notRead = append(*notRead, path)
 			}
 			continue
 		}

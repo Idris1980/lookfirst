@@ -45,6 +45,8 @@ type Node struct {
 	Kind     string // icon to draw, e.g. "vm"
 	Friendly string // plain English, e.g. "virtual machine"
 	Code     string // how it is written in the code, e.g. "azurerm_linux_virtual_machine.main"
+	Cloud    string // "aws", "azure" or "" when it is not in a cloud
+	Type     string // the cloud's own type, e.g. "AWS::EC2::Instance", "Microsoft.Compute/virtualMachines"
 	Category Category
 	File     string
 	Line     int
@@ -81,7 +83,11 @@ type Finding struct {
 }
 
 type Graph struct {
-	Sources  []string // the files that were read
+	Sources []string // the files that were read
+	// NotRead are files in the folders that LookFirst did not read, because
+	// it does not know their kind. They are listed so nothing is missed in
+	// silence.
+	NotRead  []string
 	Nodes    []*Node
 	Edges    []Edge
 	Findings []Finding
@@ -109,6 +115,7 @@ func (g *Graph) Title(c Category) string {
 // shared Internet node, are kept once.
 func (g *Graph) Merge(other *Graph) {
 	g.Sources = append(g.Sources, other.Sources...)
+	g.NotRead = append(g.NotRead, other.NotRead...)
 	for _, n := range other.Nodes {
 		if g.Node(n.ID) == nil {
 			g.Nodes = append(g.Nodes, n)
@@ -195,6 +202,20 @@ func (g *Graph) Node(id string) *Node {
 }
 
 // Worst returns the most severe finding for a node, or false if it has none.
+// CloudOf says which cloud a finding is about: that of its box, or else that
+// of the other boxes from the same file, or "" when it is not about a cloud.
+func (g *Graph) CloudOf(f Finding) string {
+	if n := g.Node(f.NodeID); n != nil && n.Cloud != "" {
+		return n.Cloud
+	}
+	for _, n := range g.Nodes {
+		if n.File == f.File && n.Cloud != "" {
+			return n.Cloud
+		}
+	}
+	return ""
+}
+
 func (g *Graph) Worst(id string) (Severity, bool) {
 	worst, found := Low, false
 	for _, f := range g.Findings {

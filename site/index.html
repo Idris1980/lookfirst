@@ -88,8 +88,11 @@
   <section id="result" class="result" hidden>
     <!-- No scripts can run in the report: the sandbox does not allow them,
          and the report's own policy forbids them too. allow-same-origin only
-         lets the report's own links, such as #project-2, scroll within it. -->
-    <iframe id="report" title="LookFirst report" sandbox="allow-same-origin"></iframe>
+         lets the report's own links, such as #project-2, scroll within it.
+         allow-popups lets the links to AWS's and Microsoft's guidance open
+         in a new tab, outside the sandbox; those links come from LookFirst
+         itself, never from the code that was read. -->
+    <iframe id="report" title="LookFirst report" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
   </section>
 
   <section class="more">
