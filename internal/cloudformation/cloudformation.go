@@ -11,6 +11,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/Idris1980/lookfirst/internal/model"
+	"github.com/Idris1980/lookfirst/internal/relate"
 	"github.com/Idris1980/lookfirst/internal/risk"
 	"github.com/Idris1980/lookfirst/internal/source"
 	"github.com/Idris1980/lookfirst/internal/yamlx"
@@ -73,16 +74,27 @@ func readFile(g *model.Graph, f source.File) {
 		})
 	}
 	// A line for every reference (!Ref, !GetAtt, !Sub, DependsOn) between
-	// two things that are drawn.
+	// two things that are drawn, saying what it means by the property that
+	// holds it and what it points at.
 	for _, res := range all {
 		if !res.drawn {
 			continue
 		}
-		for _, to := range refs(res.body) {
-			if t, ok := r.res[to]; ok && t.drawn && to != res.name {
-				g.Connect(id(res.name), id(to), "", false)
+		link := func(setting string, n *yaml.Node) {
+			for _, to := range refs(n) {
+				if t, ok := r.res[to]; ok && t.drawn && to != res.name {
+					label, kind := relate.Meaning(setting, res.typ, t.typ)
+					g.ConnectKind(id(res.name), id(to), label, kind)
+				}
 			}
 		}
+		yamlx.Pairs(res.body, func(k, v *yaml.Node) {
+			if k.Value == "Properties" {
+				yamlx.Pairs(v, func(pk, pv *yaml.Node) { link(pk.Value, pv) })
+			} else {
+				link(k.Value, v)
+			}
+		})
 	}
 
 	r.parameters(yamlx.Get(root, "Parameters"))

@@ -48,12 +48,35 @@ func combined(sections []Section) *model.Graph {
 	for _, e := range deployLinks(all) {
 		all.Connect(e.From, e.To, "", false)
 	}
+	quiet(all)
 	return all
 }
 
+// quiet leaves out of the joined picture what each folder's own picture
+// already shows: the programs a script runs, the packages it installs, and
+// then the files with nothing left to connect to and nothing to warn about.
+func quiet(g *model.Graph) {
+	gone := map[string]bool{}
+	for _, n := range g.Nodes {
+		if strings.HasPrefix(n.ID, "program.") || strings.HasPrefix(n.ID, "pkg.") {
+			n.Hidden, gone[n.ID] = true, true
+		}
+	}
+	linked := map[string]bool{}
+	for _, e := range g.Edges {
+		if !gone[e.From] && !gone[e.To] {
+			linked[e.From], linked[e.To] = true, true
+		}
+	}
+	for _, n := range g.Nodes {
+		if _, risky := g.Worst(n.ID); !linked[n.ID] && !risky && n.ID != model.InternetID {
+			n.Hidden = true
+		}
+	}
+}
+
 // deployLinks finds, for each "deploys" box, the things built by the
-// template it names, and returns a line to each one that nothing else in
-// the template points at (its top level).
+// template it names, and returns a line to where the template begins.
 func deployLinks(g *model.Graph) []model.Edge {
 	var out []model.Edge
 	for _, d := range g.Nodes {
@@ -70,14 +93,22 @@ func deployLinks(g *model.Graph) []model.Edge {
 		if len(inTemplate) == 0 {
 			continue
 		}
-		pointedAt := map[string]bool{}
+		// Where the template's traffic comes in from the internet, or, when
+		// nothing does, its top level: what nothing else in it points at.
+		pointedAt, entry := map[string]bool{}, map[string]bool{}
 		for _, e := range g.Edges {
-			if inTemplate[e.From] && inTemplate[e.To] {
+			if inTemplate[e.From] && inTemplate[e.To] && e.Kind != model.Order {
 				pointedAt[e.To] = true
+			}
+			if e.From == model.InternetID && inTemplate[e.To] {
+				entry[e.To] = true
 			}
 		}
 		for _, n := range g.Nodes {
-			if inTemplate[n.ID] && !pointedAt[n.ID] && n.Category != model.Internet {
+			if !inTemplate[n.ID] || n.Hidden || n.Category == model.Internet {
+				continue
+			}
+			if entry[n.ID] || (len(entry) == 0 && !pointedAt[n.ID]) {
 				out = append(out, model.Edge{From: d.ID, To: n.ID})
 			}
 		}

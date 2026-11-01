@@ -18,6 +18,7 @@ node --test "vscode/test/*.test.js"
 - `internal/source` – finds files and decides what kind of code each one is
 - `internal/terraform`, `arm`, `cloudformation`, `compose`, `kubernetes`, `script` – one reader per kind of code
 - `internal/risk` – rules shared by all readers: ports, secrets, placeholders, masking
+- `internal/relate` – what a line between two cloud resources means (talks to, may use, runs on, created after), shared by the Terraform, CloudFormation and ARM readers
 - `internal/analyze` – runs the readers and groups the results per folder
 - `internal/render` – the report (HTML), text, JSON, Markdown, GitHub, Mermaid and draw.io output; `cloudicons/` holds the official Azure and AWS icons (see its NOTICE)
 - `internal/advice` – what each finding means, how to fix it, and the AWS Security Hub and Microsoft cloud security benchmark controls behind it; `LOOKFIRST_PRINT_REFS=1 go test ./internal/advice -run TestPrintRefs -v` lists every link for checking

@@ -50,13 +50,71 @@ type Node struct {
 	Category Category
 	File     string
 	Line     int
+	// Hidden boxes are part of something else, such as a role assignment
+	// (drawn as a line with the right it gives) or a blob container (shown
+	// inside its storage account). They are left out of the picture but
+	// kept in the full list, so nothing is missed.
+	Hidden bool
 }
+
+// Edge kinds say what a line means.
+const (
+	// Flow: From talks to To at run time (calls it, reads from it, sends
+	// logs to it). This is what the picture is about.
+	Flow = "flow"
+	// Access: From is allowed to use To, through a role or permission.
+	Access = "access"
+	// Hosting: From runs on, sits in or signs in as To.
+	Hosting = "hosting"
+	// Order: To must exist before From is created, nothing more. Not drawn
+	// when the picture has lines of the other kinds.
+	Order = "order"
+)
 
 // Edge says that From uses or depends on To.
 type Edge struct {
 	From, To string
 	Label    string
 	Risky    bool
+	Kind     string // Flow, Access, Hosting, Order, or "" when not known
+}
+
+// HasMeaning reports whether the graph knows what its lines mean (any
+// Flow, Access or Hosting line); then the picture is drawn as a flow.
+func (g *Graph) HasMeaning() bool {
+	for _, e := range g.Edges {
+		// Lines from the internet are flows in every graph; they say
+		// nothing about whether the reader knew the other lines' meaning.
+		if e.From != InternetID && (e.Kind == Flow || e.Kind == Access || e.Kind == Hosting) {
+			return true
+		}
+	}
+	return false
+}
+
+// ConnectKind adds a line of a kind, or gives an existing line between the
+// two a stronger meaning (a flow beats an access line, which beats hosting,
+// which beats order) and adds the label.
+func (g *Graph) ConnectKind(from, to, label, kind string) {
+	rank := map[string]int{"": 0, Order: 1, Hosting: 2, Access: 3, Flow: 4}
+	for i, e := range g.Edges {
+		if e.From == from && e.To == to {
+			if rank[kind] > rank[e.Kind] {
+				g.Edges[i].Kind = kind
+				if e.Kind == Order || e.Kind == "" {
+					g.Edges[i].Label = "" // an order line's label meant nothing
+				}
+			}
+			if label != "" && !strings.Contains(g.Edges[i].Label, label) {
+				if g.Edges[i].Label != "" {
+					g.Edges[i].Label += ", "
+				}
+				g.Edges[i].Label += label
+			}
+			return
+		}
+	}
+	g.Edges = append(g.Edges, Edge{From: from, To: to, Label: label, Kind: kind})
 }
 
 type Severity int
@@ -165,6 +223,12 @@ func (g *Graph) Expose(nodeID, label string, risky bool) {
 		}}, g.Nodes...)
 	}
 	g.Connect(InternetID, nodeID, label, risky)
+	// Traffic from the internet is a flow, whatever else the graph knows.
+	for i, e := range g.Edges {
+		if e.From == InternetID && e.To == nodeID && e.Kind == "" {
+			g.Edges[i].Kind = Flow
+		}
+	}
 }
 
 // Add records a finding. A node ID that is not in the graph is dropped so

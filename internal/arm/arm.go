@@ -161,6 +161,8 @@ type resource struct {
 	Type       string            `json:"type"`
 	Name       string            `json:"name"`
 	DependsOn  []string          `json:"dependsOn"`
+	Scope      string            `json:"scope"`
+	Identity   map[string]any    `json:"identity"`
 	Properties map[string]any    `json:"properties"`
 	Resources  []json.RawMessage `json:"resources"`
 	Kind       string            `json:"kind"`
@@ -180,6 +182,10 @@ type reader struct {
 	tmpl  template
 	items []*item
 	seen  map[string]int // how many of each type have been placed, for line lookup
+
+	byName    map[string]string // "v:name" or "p:name" to the resource named by that variable or parameter
+	converted map[string]bool   // role assignments drawn as lines instead of boxes
+	roles     []*item           // role assignments, drawn after every other line
 }
 
 func Read(files []source.File) *model.Graph {
@@ -195,7 +201,7 @@ func Read(files []source.File) *model.Graph {
 				continue
 			}
 		}
-		r := &reader{g: g, file: f.Path, src: f.Data, seen: map[string]int{}}
+		r := &reader{g: g, file: f.Path, src: f.Data, seen: map[string]int{}, converted: map[string]bool{}}
 		if err := json.Unmarshal(data, &r.tmpl); err != nil {
 			g.Add(model.High, "", "Syntax error", err.Error(), f.Path, 0)
 			continue
@@ -253,6 +259,10 @@ func (r *reader) read(bicep bool) {
 			continue
 		}
 		e := lookup(it.typ)
+		// A function app is a web app (Microsoft.Web/sites) of kind functionapp.
+		if strings.EqualFold(it.typ, "Microsoft.Web/sites") && strings.Contains(strings.ToLower(it.res.Kind), "functionapp") {
+			e.kind, e.friendly = "function", "function app"
+		}
 		// Show the name the resource gets in Azure when the code spells it
 		// out; when it is computed, the name it has in the Bicep code.
 		name, code := shortName(it.name), it.typ
@@ -269,26 +279,17 @@ func (r *reader) read(bicep bool) {
 	}
 	for _, it := range r.items {
 		me := id(it.typ, it.name)
+		// dependsOn only says what Azure must create first.
 		for _, d := range it.res.DependsOn {
 			if to := r.resolveRef(d); to != "" {
-				r.g.Connect(me, to, "", false)
+				r.g.ConnectKind(me, to, "", model.Order)
 			}
 		}
-		walkStrings(it.res.Properties, func(_ string, s string) {
-			for _, m := range resourceIDCall.FindAllString(s, -1) {
-				if to := r.resolveRef(m); to != "" && to != me {
-					r.g.Connect(me, to, "", false)
-				}
-			}
-			// "serverFarmId": "[variables('planId')]"
-			if varCall.MatchString(s) {
-				if to := r.resolveRef(s); to != "" && to != me {
-					r.g.Connect(me, to, "", false)
-				}
-			}
-		})
+		r.relations(it)
+		r.exposure(it, me)
 		r.rules(it)
 	}
+	r.tidy()
 	r.parameters()
 }
 

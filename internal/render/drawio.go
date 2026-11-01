@@ -39,6 +39,9 @@ func DrawIO(w io.Writer, sections []Section) error {
 		b.WriteString("      <root>\n        <mxCell id=\"0\"/>\n        <mxCell id=\"1\" parent=\"0\"/>\n")
 
 		for i, c := range l.cols {
+			if c.Title == "" {
+				continue // a flow picture's columns have no names
+			}
 			fmt.Fprintf(&b, `        <mxCell id="col%d" value="%s" style="text;fontStyle=1;fontColor=#5d6673;align=left;verticalAlign=middle;" vertex="1" parent="1"><mxGeometry x="%d" y="14" width="%d" height="24" as="geometry"/></mxCell>`+"\n",
 				i, xmlText(strings.ToUpper(c.Title)), c.X, nodeW)
 		}
@@ -79,6 +82,14 @@ func DrawIO(w io.Writer, sections []Section) error {
 				continue
 			}
 			style := "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;strokeColor=#8a94a3;endArrow=block;endFill=1;fontSize=10;"
+			switch e.Kind {
+			case model.Flow:
+				style = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;strokeColor=#4a6a8f;strokeWidth=1.5;endArrow=block;endFill=1;fontSize=10;"
+			case model.Access:
+				style = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;strokeColor=#8250df;dashed=1;endArrow=block;endFill=1;fontColor=#8250df;fontSize=10;"
+			case model.Hosting:
+				style = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;strokeColor=#8a94a3;dashed=1;dashPattern=2 3;endArrow=open;fontSize=10;"
+			}
 			if e.Risky {
 				style = "edgeStyle=orthogonalEdgeStyle;rounded=1;html=0;strokeColor=#d1242f;strokeWidth=2;dashed=1;endArrow=block;endFill=1;fontColor=#d1242f;fontSize=10;"
 			}

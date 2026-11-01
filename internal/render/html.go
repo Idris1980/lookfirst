@@ -30,6 +30,7 @@ var report = template.Must(template.New("report").Parse(reportHTML))
 const (
 	nodeW, nodeH = 184, 60
 	colGap       = 68
+	flowGap      = 140 // a flow picture names every line, so its columns are further apart
 	rowGap       = 26
 	padX, padY   = 24, 80
 	maxRows      = 12 // more than this in one column is folded into "+N more"
@@ -53,6 +54,9 @@ type svgNode struct {
 type svgEdge struct {
 	D      string
 	Risky  bool
+	Kind   string // model.Flow, Access, Hosting, Order or ""
+	below  bool   // the label hangs under the line and grows downwards
+	Anchor string // "end" or "start" when the label lines up with LX that way; centred when empty
 	Label  string
 	Lines  []string // the label, one item per line so it fits between columns
 	LX, LY int
@@ -141,6 +145,7 @@ type project struct {
 	Total        int
 	NotRead      []string      // files in the folders that LookFirst did not read
 	Symbols      template.HTML // the official icons the picture uses, once each
+	Flow         bool          // the picture follows the flow; show what the lines mean
 }
 
 type page struct {
@@ -195,7 +200,7 @@ func buildProject(s Section, opt Options) project {
 	g := s.Graph
 	p := project{Name: s.Name, Summary: explain.Summary(g), Counts: map[string]int{}}
 	l := layout(g)
-	p.Cols, p.W, p.H = l.cols, l.w, l.h
+	p.Cols, p.W, p.H, p.Flow = l.cols, l.w, l.h, l.flow
 	var used []string // official icons, for the symbols at the top of the picture
 
 	for _, n := range l.order {
@@ -238,12 +243,20 @@ func buildProject(s Section, opt Options) project {
 	}
 
 	lanes := map[int]int{}
+	// How many lines leave and reach each box, to place the labels.
+	outs, ins := map[string]int{}, map[string]int{}
+	for _, e := range l.edges {
+		outs[e.From]++
+		ins[e.To]++
+	}
 	for _, e := range l.edges {
 		a, b := l.pos[e.From], l.pos[e.To]
-		se := edgePath(a, b, e, lanes)
+		se := edgePath(a, b, e, lanes, l.gap, l.flow, map[string]int{e.From: outs[e.From], e.To: ins[e.To]})
 		if se.Label != "" {
-			se.Lines = strings.Split(se.Label, ", ")
-			se.LY -= 12 * (len(se.Lines) - 1)
+			se.Lines = wrapLabel(se.Label, 24)
+			if !se.below {
+				se.LY -= 12 * (len(se.Lines) - 1) // grow upwards, away from the line
+			}
 		}
 		p.Edges = append(p.Edges, se)
 	}
@@ -316,23 +329,70 @@ type laidOut struct {
 	edges []model.Edge
 	cols  []svgCol
 	w, h  int
+	gap   int  // room between columns
+	flow  bool // columns follow the flow, not the kind of thing
 }
 
-// layout puts each category in a column, folds long columns, and orders
-// each column so lines cross as little as possible.
+// layout puts the boxes in columns, folds long columns, and orders each
+// column so lines cross as little as possible.
 func layout(g *model.Graph) laidOut { return layoutRows(g, maxRows) }
 
 // layoutRows is layout with another limit before a column is folded; 0
 // never folds, for exports that must hold every box.
+//
+// When the graph knows what its lines mean, the columns follow the flow:
+// the internet on the left, then what it reaches, then what that talks
+// to, and so on, so the picture reads from left to right like the traffic
+// does. Lines that only say what must be created first are left out then.
+// Otherwise each kind of thing gets a column of its own.
 func layoutRows(g *model.Graph, rowsMax int) laidOut {
-	columns := map[model.Category][]*model.Node{}
+	flow := g.HasMeaning()
+	var shown []*model.Node
+	isShown := map[string]bool{}
 	for _, n := range g.Nodes {
-		columns[n.Category] = append(columns[n.Category], n)
+		if !n.Hidden {
+			shown = append(shown, n)
+			isShown[n.ID] = true
+		}
+	}
+	var drawn []model.Edge
+	for _, e := range g.Edges {
+		if isShown[e.From] && isShown[e.To] && !(flow && e.Kind == model.Order) {
+			drawn = append(drawn, e)
+		}
+	}
+
+	columns := map[int][]*model.Node{}
+	titles := map[int]string{}
+	var keys []int
+	if flow {
+		layer := flowLayers(shown, drawn)
+		for _, n := range shown {
+			columns[layer[n.ID]] = append(columns[layer[n.ID]], n)
+		}
+		for k := range columns {
+			keys = append(keys, k)
+		}
+		sort.Ints(keys)
+		if alone := len(keys) > 0 && keys[len(keys)-1] == loneLayer; alone {
+			titles[loneLayer] = "Not connected"
+		}
+	} else {
+		for _, n := range shown {
+			columns[int(n.Category)] = append(columns[int(n.Category)], n)
+		}
+		for _, c := range g.Columns() {
+			if len(columns[int(c)]) > 0 {
+				keys = append(keys, int(c))
+				titles[int(c)] = g.Title(c)
+			}
+		}
 	}
 
 	// Fold long columns, keeping the boxes with findings.
 	redirect := map[string]string{}
-	for c, nodes := range columns {
+	for _, c := range keys {
+		nodes := columns[c]
 		if rowsMax == 0 || len(nodes) <= rowsMax {
 			continue
 		}
@@ -343,8 +403,8 @@ func layoutRows(g *model.Graph, rowsMax int) laidOut {
 		})
 		keep, rest := nodes[:rowsMax-1], nodes[rowsMax-1:]
 		more := &model.Node{
-			ID: "more." + c.String(), Name: fmt.Sprintf("+%d more", len(rest)), Kind: "generic",
-			Friendly: "listed in the findings", Category: c,
+			ID: fmt.Sprintf("more.%d", c), Name: fmt.Sprintf("+%d more", len(rest)), Kind: "generic",
+			Friendly: "listed in the findings", Category: rest[0].Category,
 		}
 		for _, n := range rest {
 			redirect[n.ID] = more.ID
@@ -359,7 +419,7 @@ func layoutRows(g *model.Graph, rowsMax int) laidOut {
 	}
 	var edges []model.Edge
 	seen := map[[2]string]int{}
-	for _, e := range g.Edges {
+	for _, e := range drawn {
 		e.From, e.To = target(e.From), target(e.To)
 		if e.From == e.To {
 			continue
@@ -376,14 +436,8 @@ func layoutRows(g *model.Graph, rowsMax int) laidOut {
 		edges = append(edges, e)
 	}
 
-	var used []model.Category
-	for _, c := range g.Columns() {
-		if len(columns[c]) > 0 {
-			used = append(used, c)
-		}
-	}
 	colOf := map[string]int{}
-	for i, c := range used {
+	for i, c := range keys {
 		for _, n := range columns[c] {
 			colOf[n.ID] = i
 		}
@@ -392,7 +446,7 @@ func layoutRows(g *model.Graph, rowsMax int) laidOut {
 	// Barycenter ordering: move each box toward the average row of the
 	// boxes it is connected to in other columns. A few sweeps are plenty.
 	rowOf := map[string]float64{}
-	for _, c := range used {
+	for _, c := range keys {
 		for i, n := range columns[c] {
 			rowOf[n.ID] = float64(i)
 		}
@@ -405,7 +459,7 @@ func layoutRows(g *model.Graph, rowsMax int) laidOut {
 		}
 	}
 	for sweep := 0; sweep < 4; sweep++ {
-		for _, c := range used {
+		for _, c := range keys {
 			nodes := columns[c]
 			score := map[string]float64{}
 			for _, n := range nodes {
@@ -435,29 +489,115 @@ func layoutRows(g *model.Graph, rowsMax int) laidOut {
 		}
 	}
 
-	out := laidOut{pos: map[string]place{}, edges: edges}
+	gap := colGap
+	if flow {
+		gap = flowGap // room for what each line means
+	}
+	out := laidOut{pos: map[string]place{}, edges: edges, gap: gap, flow: flow}
 	rows := 0
-	for i, c := range used {
-		x := padX + i*(nodeW+colGap)
-		out.cols = append(out.cols, svgCol{X: x, Title: g.Title(c)})
+	for i, c := range keys {
+		x := padX + i*(nodeW+gap)
+		out.cols = append(out.cols, svgCol{X: x, Title: titles[c]})
 		for r, n := range columns[c] {
 			out.pos[n.ID] = place{x, padY + r*(nodeH+rowGap), i, r}
 			out.order = append(out.order, n)
 		}
 		rows = max(rows, len(columns[c]))
 	}
-	out.w = padX + len(used)*(nodeW+colGap) - colGap/2 + padX
+	out.w = padX + len(keys)*(nodeW+gap) - gap/2 + padX
 	out.h = padY + rows*(nodeH+rowGap) + padX
 	return out
+}
+
+// loneLayer is the column for boxes no line reaches, last in the picture.
+const loneLayer = 1 << 20
+
+// flowLayers gives each box its column in a flow picture: the internet
+// first, and every box one column right of the furthest box that talks to
+// it. Boxes that only host, give rights or sign in (a plan, an identity)
+// are then placed one column right of what uses them, without pushing
+// anything further right. Loops are cut by never going further right than
+// there are boxes.
+func flowLayers(nodes []*model.Node, edges []model.Edge) map[string]int {
+	layer := map[string]int{}
+	linked, inFlow := map[string]bool{}, map[string]bool{}
+	var flows, others []model.Edge
+	for _, e := range edges {
+		linked[e.From], linked[e.To] = true, true
+		if e.Kind == model.Flow || e.Kind == "" {
+			flows = append(flows, e)
+			inFlow[e.From], inFlow[e.To] = true, true
+		} else {
+			others = append(others, e)
+		}
+	}
+	hasInternet := linked[model.InternetID]
+	for _, n := range nodes {
+		switch {
+		case !linked[n.ID]:
+			layer[n.ID] = loneLayer
+		case n.ID == model.InternetID || !hasInternet:
+			layer[n.ID] = 0
+		default:
+			layer[n.ID] = 1
+		}
+	}
+	push := func(es []model.Edge, movable func(id string) bool) {
+		for round := 0; round < len(nodes); round++ {
+			changed := false
+			for _, e := range es {
+				if e.To == model.InternetID || !movable(e.To) {
+					continue
+				}
+				if next := layer[e.From] + 1; next > layer[e.To] && next <= len(nodes) {
+					layer[e.To] = next
+					changed = true
+				}
+			}
+			if !changed {
+				return
+			}
+		}
+	}
+	push(flows, func(string) bool { return true })
+	// An identity that is given rights stands just left of what it may use,
+	// so that line is short; a plan or a network just right of what uses it.
+	first := 0
+	if hasInternet {
+		first = 1
+	}
+	placed := map[string]bool{}
+	for _, e := range others {
+		if inFlow[e.From] || !inFlow[e.To] || e.From == model.InternetID {
+			continue
+		}
+		at := max(first, layer[e.To]-1)
+		if !placed[e.From] || at < layer[e.From] {
+			layer[e.From], placed[e.From] = at, true
+		}
+	}
+	push(others, func(id string) bool { return !inFlow[id] && !placed[id] })
+	// The internet stands just left of what it reaches, not across the
+	// whole picture from it.
+	if hasInternet {
+		nearest := 0
+		for _, e := range edges {
+			if e.From == model.InternetID && (nearest == 0 || layer[e.To] < nearest) {
+				nearest = layer[e.To]
+			}
+		}
+		layer[model.InternetID] = max(0, nearest-1)
+	}
+	return layer
 }
 
 // edgePath draws a soft curve between two boxes, from the side that faces
 // the other box. A line that skips a column travels in the gap above the
 // target's row, each in its own lane, so it never looks like it passes
 // through another box.
-func edgePath(a, b place, e model.Edge, lanes map[int]int) svgEdge {
+func edgePath(a, b place, e model.Edge, lanes map[int]int, colGap int, flow bool, fan map[string]int) svgEdge {
 	ay, by := a.y+nodeH/2, b.y+nodeH/2
-	out := svgEdge{Risky: e.Risky, Label: e.Label}
+	out := svgEdge{Risky: e.Risky, Label: e.Label, Kind: e.Kind}
 
 	if a.col == b.col {
 		x := a.x + nodeW
@@ -480,6 +620,23 @@ func edgePath(a, b place, e model.Edge, lanes map[int]int) svgEdge {
 		if ay == by {
 			out.LY = ay - 6
 		}
+		if flow {
+			// Where the line is level, at the end with fewer lines: just
+			// before the arrow head when one box talks to many, just after
+			// the start when many talk to one box.
+			out.LX, out.LY, out.Anchor = x2-dir*12, by-6, "end"
+			if dir < 0 {
+				out.Anchor = "start"
+			}
+			if fan[e.To] > fan[e.From] {
+				// Below the line, so it does not meet a label that sits
+				// above another line into the same box.
+				out.LX, out.LY, out.Anchor, out.below = x1+dir*12, ay+14, "start", true
+				if dir < 0 {
+					out.Anchor = "end"
+				}
+			}
+		}
 		return out
 	}
 
@@ -491,8 +648,34 @@ func edgePath(a, b place, e model.Edge, lanes map[int]int) svgEdge {
 	out.D = fmt.Sprintf("M%d %d C%d %d %d %d %d %d L%d %d C%d %d %d %d %d %d",
 		x1, ay, x1+q, ay, x1+q, lane, x1+2*q, lane,
 		x2-2*q, lane, x2-q, lane, x2-q, by, x2, by)
-	out.LX, out.LY = x1+2*q+dir*60, lane-5
+	out.LX, out.LY = (x1+x2)/2, lane+11 // under the lane, clear of the box above
 	return out
+}
+
+// wrapLabel splits a line's label into lines of about n letters: each
+// part after " · " on a line of its own, and the items in a part, split at
+// commas, packed onto as few lines as fit.
+func wrapLabel(label string, n int) []string {
+	var lines []string
+	for _, part := range strings.Split(label, " · ") {
+		cur := ""
+		for _, item := range strings.Split(part, ", ") {
+			item = strings.TrimSpace(item)
+			switch {
+			case cur == "":
+				cur = item
+			case len([]rune(cur))+2+len([]rune(item)) <= n:
+				cur += ", " + item
+			default:
+				lines = append(lines, cur+",")
+				cur = item
+			}
+		}
+		if cur != "" {
+			lines = append(lines, cur)
+		}
+	}
+	return lines
 }
 
 func clip(s string, n int) string {

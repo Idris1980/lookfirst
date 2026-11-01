@@ -10,8 +10,9 @@ import (
 
 // Mermaid writes the picture as a Mermaid flowchart, which GitHub, GitLab,
 // VS Code, Obsidian and many wikis draw on their own. Each column becomes a
-// group, risky lines are red and dashed, and boxes with findings are framed
-// in the colour of the worst one.
+// group (or, when the lines say who talks to whom, the boxes follow the
+// flow), risky lines are red, rights purple, and boxes with findings are
+// framed in the colour of the worst one.
 //
 // Everything from the code is written inside quoted labels with quotes,
 // angle brackets and backticks replaced, so a resource name cannot add
@@ -26,7 +27,7 @@ func Mermaid(w io.Writer, sections []Section) error {
 	b.WriteString("flowchart LR\n")
 	n := 0
 	ids := map[string]string{}
-	var risky []int
+	var risky, access, hosting []int
 	edge := 0
 	for si, s := range sections {
 		g := s.Graph
@@ -35,17 +36,26 @@ func Mermaid(w io.Writer, sections []Section) error {
 			prefix = fmt.Sprintf("p%d_", si+1)
 			fmt.Fprintf(&b, "  subgraph %sproject[\"%s\"]\n", prefix, label(s.Name))
 		}
-		for _, c := range g.Columns() {
+		// A picture that knows what its lines mean is left to Mermaid to lay
+		// out along the flow; otherwise each kind of thing is a group.
+		flow := g.HasMeaning()
+		groups := g.Columns()
+		if flow {
+			groups = []model.Category{-1}
+		}
+		for _, c := range groups {
 			var nodes []*model.Node
 			for _, nd := range g.Nodes {
-				if nd.Category == c {
+				if !nd.Hidden && (flow || nd.Category == c) {
 					nodes = append(nodes, nd)
 				}
 			}
 			if len(nodes) == 0 {
 				continue
 			}
-			fmt.Fprintf(&b, "  subgraph %scol%d[\"%s\"]\n", prefix, int(c), label(g.Title(c)))
+			if !flow {
+				fmt.Fprintf(&b, "  subgraph %scol%d[\"%s\"]\n", prefix, int(c), label(g.Title(c)))
+			}
 			for _, nd := range nodes {
 				n++
 				id := fmt.Sprintf("n%d", n)
@@ -59,17 +69,26 @@ func Mermaid(w io.Writer, sections []Section) error {
 					fmt.Fprintf(&b, "    class %s %s\n", id, sev)
 				}
 			}
-			b.WriteString("  end\n")
+			if !flow {
+				b.WriteString("  end\n")
+			}
 		}
 		for _, e := range g.Edges {
 			from, to := ids[prefix+e.From], ids[prefix+e.To]
-			if from == "" || to == "" {
+			if from == "" || to == "" || (flow && e.Kind == model.Order) {
 				continue
 			}
 			arrow := "-->"
-			if e.Risky {
+			switch {
+			case e.Risky:
 				arrow = "-.->"
 				risky = append(risky, edge)
+			case e.Kind == model.Access:
+				arrow = "-.->"
+				access = append(access, edge)
+			case e.Kind == model.Hosting:
+				arrow = "-.->"
+				hosting = append(hosting, edge)
 			}
 			if e.Label != "" {
 				fmt.Fprintf(&b, "  %s %s|\"%s\"| %s\n", from, arrow, label(e.Label), to)
@@ -87,6 +106,12 @@ func Mermaid(w io.Writer, sections []Section) error {
 	b.WriteString("  classDef low stroke:#2f6fb3\n")
 	for _, i := range risky {
 		fmt.Fprintf(&b, "  linkStyle %d stroke:#d1242f,stroke-width:2px\n", i)
+	}
+	for _, i := range access {
+		fmt.Fprintf(&b, "  linkStyle %d stroke:#8250df,color:#8250df\n", i)
+	}
+	for _, i := range hosting {
+		fmt.Fprintf(&b, "  linkStyle %d stroke:#8a94a3,stroke-width:1px\n", i)
 	}
 	_, err := io.WriteString(w, b.String())
 	return err

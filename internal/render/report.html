@@ -9,7 +9,7 @@
 <style>
 :root {
   --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5d6673; --line: #d9dde3;
-  --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
+  --flow: #4a6a8f; --access: #8250df; --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
   --low: #2f6fb3; --low-bg: #e6f0fb;
   --c-internet: #6b7280; --c-network: #2563eb; --c-security: #7c3aed; --c-compute: #0f8a7e;
   --c-data: #c2410c; --c-other: #64748b;
@@ -17,7 +17,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #111418; --card: #1a1f25; --text: #e6e9ee; --muted: #9aa4b2; --line: #2c333c;
-    --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
+    --flow: #8fb3dc; --access: #b392f0; --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
     --low: #6aa8ff; --low-bg: #16273d;
     --c-internet: #9ca3af; --c-network: #6b9bff; --c-security: #a78bfa; --c-compute: #2dd4bf;
     --c-data: #fb923c; --c-other: #94a3b8;
@@ -26,14 +26,14 @@
 /* Inside VS Code the editor theme decides, not the system setting. */
 body.vscode-light {
   --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5d6673; --line: #d9dde3;
-  --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
+  --flow: #4a6a8f; --access: #8250df; --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
   --low: #2f6fb3; --low-bg: #e6f0fb;
   --c-internet: #6b7280; --c-network: #2563eb; --c-security: #7c3aed; --c-compute: #0f8a7e;
   --c-data: #c2410c; --c-other: #64748b;
 }
 body.vscode-dark, body.vscode-high-contrast:not(.vscode-high-contrast-light) {
   --bg: #111418; --card: #1a1f25; --text: #e6e9ee; --muted: #9aa4b2; --line: #2c333c;
-  --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
+  --flow: #8fb3dc; --access: #b392f0; --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
   --low: #6aa8ff; --low-bg: #16273d;
   --c-internet: #9ca3af; --c-network: #6b9bff; --c-security: #a78bfa; --c-compute: #2dd4bf;
   --c-data: #fb923c; --c-other: #94a3b8;
@@ -58,8 +58,19 @@ svg { display: block; font-family: inherit; }
 .edge { fill: none; stroke: var(--edge); stroke-width: 1.5; }
 .edge.risky { stroke: var(--high); stroke-width: 2.5; stroke-dasharray: 6 4; }
 .edgelabel { font-size: 11px; fill: var(--muted); text-anchor: middle; paint-order: stroke; stroke: var(--card); stroke-width: 4px; }
+.edgelabel.end { text-anchor: end; }
+.edgelabel.start { text-anchor: start; }
 .edgelabel.risky { fill: var(--high); font-weight: 600; }
 .arrow { fill: var(--edge); }
+.edge.flow { stroke: var(--flow); stroke-width: 1.8; }
+.arrow.flow { fill: var(--flow); }
+.edge.access { stroke: var(--access); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.arrow.access { fill: var(--access); }
+.edgelabel.access { fill: var(--access); }
+.edge.hosting { stroke: var(--edge); stroke-width: 1; stroke-dasharray: 2 3; }
+.edge.risky { stroke: var(--high); stroke-width: 2.5; stroke-dasharray: 6 4; } /* over every kind */
+.legend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.legend svg { display: inline-block; vertical-align: middle; margin-right: 6px; }
 .arrow.risky { fill: var(--high); }
 .box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
 .box.high { stroke: var(--high); stroke-width: 2.5; }
@@ -238,11 +249,13 @@ details.inventory > summary h2 { display: inline; }
         <defs>
           <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0L10 5L0 10z"/></marker>
           <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow risky" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow flow" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow access" d="M0 0L10 5L0 10z"/></marker>
           {{.Symbols}}
         </defs>
         {{range .Cols}}<text class="coltitle" x="{{.X}}" y="28">{{.Title}}</text>{{end}}
-        {{range .Edges}}<path class="edge{{if .Risky}} risky{{end}}" d="{{.D}}" marker-end="{{if .Risky}}url(#ar){{else}}url(#a){{end}}"/>{{end}}
-        {{range .Edges}}{{if .Lines}}{{$e := .}}<text class="edgelabel{{if .Risky}} risky{{end}}" x="{{.LX}}" y="{{.LY}}">{{range $i, $l := .Lines}}<tspan x="{{$e.LX}}" dy="{{if $i}}12{{else}}0{{end}}">{{$l}}</tspan>{{end}}</text>{{end}}{{end}}
+        {{range .Edges}}<path class="edge {{.Kind}}{{if .Risky}} risky{{end}}" d="{{.D}}" marker-end="{{if .Risky}}url(#ar){{else if eq .Kind "flow"}}url(#af){{else if eq .Kind "access"}}url(#aa){{else}}url(#a){{end}}"/>{{end}}
+        {{range .Edges}}{{if .Lines}}{{$e := .}}<text class="edgelabel {{.Kind}} {{.Anchor}}{{if .Risky}} risky{{end}}" x="{{.LX}}" y="{{.LY}}">{{range $i, $l := .Lines}}<tspan x="{{$e.LX}}" dy="{{if $i}}12{{else}}0{{end}}">{{$l}}</tspan>{{end}}</text>{{end}}{{end}}
         {{range .Nodes}}
         {{if .Href}}<a class="nodelink" href="{{.Href}}">{{end}}
         <g class="{{.Cat}}">
@@ -264,4 +277,10 @@ details.inventory > summary h2 { display: inline; }
         {{end}}
       </svg>
     </div>
+    {{if .Flow}}<p class="legend">
+      <span><svg width="34" height="10"><path class="edge flow" d="M1 5H31"/></svg>talks to, at run time</span>
+      <span><svg width="34" height="10"><path class="edge access" d="M1 5H31"/></svg>is allowed to use (a role)</span>
+      <span><svg width="34" height="10"><path class="edge hosting" d="M1 5H31"/></svg>runs on, sits in or signs in as</span>
+      <span><svg width="34" height="10"><path class="edge risky" d="M1 5H31"/></svg>risky</span>
+    </p>{{end}}
 {{end}}

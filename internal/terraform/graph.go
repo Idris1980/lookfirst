@@ -9,6 +9,7 @@ import (
 	"github.com/zclconf/go-cty/cty/convert"
 
 	"github.com/Idris1980/lookfirst/internal/model"
+	"github.com/Idris1980/lookfirst/internal/relate"
 )
 
 func build(c *config) *model.Graph {
@@ -40,14 +41,16 @@ func build(c *config) *model.Graph {
 		})
 	}
 
-	seen := map[[2]string]bool{}
-	connect := func(from, to string) {
-		key := [2]string{from, to}
-		if to == from || seen[key] || g.Node(from) == nil || g.Node(to) == nil {
+	// Each line says what it means, from the setting that holds the
+	// reference and what it points at: "in subnet", "runs as", "reads and
+	// writes data in".
+	connect := func(from, to, setting string) {
+		n := g.Node(to)
+		if to == from || g.Node(from) == nil || n == nil {
 			return
 		}
-		seen[key] = true
-		g.Edges = append(g.Edges, model.Edge{From: from, To: to})
+		label, kind := relate.Meaning(setting, g.Node(from).Type, n.Type)
+		g.ConnectKind(from, to, label, kind)
 	}
 	for _, r := range c.resources {
 		if hidden[r.typ] {
@@ -57,11 +60,11 @@ func build(c *config) *model.Graph {
 		// An association only says that two other things belong together,
 		// so it becomes a line between them instead of a box.
 		if isAssociation(r.typ) && len(refs) == 2 {
-			connect(refs[0], refs[1])
+			connect(refs[0], refs[1], r.typ)
 			continue
 		}
-		for _, to := range refs {
-			connect(r.id(), to)
+		for _, ref := range referencesBy(r.body) {
+			connect(r.id(), ref.to, ref.setting)
 		}
 	}
 
@@ -77,6 +80,21 @@ func references(body *hclsyntax.Body) []string {
 		for _, t := range a.Expr.Variables() {
 			if id, ok := resourceRef(t); ok {
 				out = append(out, id)
+			}
+		}
+	})
+	return out
+}
+
+type ref struct{ to, setting string }
+
+// referencesBy is references with the name of the setting each is in.
+func referencesBy(body *hclsyntax.Body) []ref {
+	var out []ref
+	walk(body, func(a *hclsyntax.Attribute) {
+		for _, t := range a.Expr.Variables() {
+			if id, ok := resourceRef(t); ok {
+				out = append(out, ref{id, a.Name})
 			}
 		}
 	})

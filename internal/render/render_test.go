@@ -220,3 +220,55 @@ func TestMarkdownPutsTheChangeFirst(t *testing.T) {
 		t.Errorf("the folded part should count everything:\n%s", out)
 	}
 }
+
+// A graph that knows what its lines mean is drawn along the flow: the
+// internet first, then what it reaches and what that talks to. Lines that
+// only give the order of creation, and hidden boxes, are left out.
+func TestFlowPicture(t *testing.T) {
+	g := &model.Graph{}
+	g.AddNode(&model.Node{ID: "web", Name: "web", Category: model.Compute})
+	g.AddNode(&model.Node{ID: "db", Name: "db", Category: model.Data})
+	g.AddNode(&model.Node{ID: "plan", Name: "plan", Category: model.Compute})
+	g.AddNode(&model.Node{ID: "role", Name: "role", Category: model.Security, Hidden: true})
+	g.Expose("web", "HTTPS", false)
+	g.ConnectKind("web", "db", "reads and writes data in", model.Flow)
+	g.ConnectKind("web", "plan", "runs on", model.Hosting)
+	g.ConnectKind("db", "plan", "", model.Order)
+	g.ConnectKind("role", "db", "", model.Order)
+
+	l := layout(g)
+	if !l.flow {
+		t.Fatal("want a flow picture")
+	}
+	col := func(id string) int { return l.pos[id].col }
+	if col(model.InternetID) != 0 || col("web") != 1 || col("db") != 2 || col("plan") != 2 {
+		t.Errorf("columns: internet %d, web %d, db %d, plan %d", col(model.InternetID), col("web"), col("db"), col("plan"))
+	}
+	if _, ok := l.pos["role"]; ok {
+		t.Error("a hidden box was drawn")
+	}
+	for _, e := range l.edges {
+		if e.Kind == model.Order {
+			t.Errorf("an order line was drawn: %+v", e)
+		}
+	}
+
+	var m bytes.Buffer
+	Mermaid(&m, []Section{{Graph: g}})
+	if strings.Contains(m.String(), "subgraph") || strings.Contains(m.String(), "role") {
+		t.Errorf("mermaid flow picture:\n%s", m.String())
+	}
+	var d bytes.Buffer
+	DrawIO(&d, []Section{{Graph: g}})
+	if strings.Contains(d.String(), "role") || !strings.Contains(d.String(), "reads and writes data in") {
+		t.Errorf("draw.io flow picture:\n%s", d.String())
+	}
+}
+
+func TestWrapLabel(t *testing.T) {
+	got := wrapLabel("keeps its state in · may use blobs (owner), queues, tables", 24)
+	want := []string{"keeps its state in", "may use blobs (owner),", "queues, tables"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
