@@ -95,6 +95,40 @@ func TestExportsHoldEveryBox(t *testing.T) {
 	}
 }
 
+// Several folders are drawn together on one page, and a script that
+// deploys a template is joined to what the template builds.
+func TestCombinedJoinsDeployments(t *testing.T) {
+	script := &model.Graph{Order: []model.Category{model.Compute, model.CloudCompute, model.CloudData}}
+	script.AddNode(&model.Node{ID: "script.v40/deploy.ps1", Name: "deploy.ps1", Category: model.Compute, File: "v40/deploy.ps1"})
+	script.AddNode(&model.Node{ID: "deploy.azure.templates/main.json", Name: "templates/main.json", Category: model.CloudCompute, File: "v40/deploy.ps1"})
+	tmpl := &model.Graph{}
+	tmpl.AddNode(&model.Node{ID: "app", Name: "app", Cloud: "azure", Category: model.Compute, File: "v40/templates/main.json"})
+	tmpl.AddNode(&model.Node{ID: "plan", Name: "plan", Cloud: "azure", Category: model.Compute, File: "v40/templates/main.json"})
+	tmpl.Connect("app", "plan", "", false)
+
+	all := combined([]Section{{Name: "v40", Graph: script}, {Name: "templates", Graph: tmpl}})
+	joined := map[string]bool{}
+	for _, e := range all.Edges {
+		if e.From == "deploy.azure.templates/main.json" {
+			joined[e.To] = true
+		}
+	}
+	if !joined["app"] || joined["plan"] {
+		t.Errorf("want a line to the template's top level (app) only, got %v", joined)
+	}
+	if n := all.Node("app"); n == nil || n.Category != model.CloudCompute {
+		t.Errorf("the web app should be in the cloud servers column with scripts around: %+v", n)
+	}
+	if tmpl.Node("app").Category != model.Compute {
+		t.Error("combining changed the folder's own picture")
+	}
+	var d bytes.Buffer
+	DrawIO(&d, []Section{{Name: "v40", Graph: script}, {Name: "templates", Graph: tmpl}})
+	if !strings.Contains(d.String(), `name="All folders"`) {
+		t.Error("the draw.io file should start with a page of all folders")
+	}
+}
+
 func TestLinksOnlyForVSCode(t *testing.T) {
 	var plain, vscode bytes.Buffer
 	HTML(&plain, []Section{{Name: "x", Graph: hostile()}}, Options{})

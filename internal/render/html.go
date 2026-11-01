@@ -150,6 +150,9 @@ type page struct {
 	Counts     map[string]int
 	Projects   []project
 	Multi      bool
+	// Combined is every folder in one picture, scripts joined to the
+	// templates they deploy, shown at the top when there are several.
+	Combined *project
 }
 
 // HTML writes the report. With several sections, the riskiest project
@@ -168,7 +171,9 @@ func HTML(w io.Writer, sections []Section, opt Options) error {
 	if p.Multi && opt.Overview != nil {
 		p.Overall = opt.Overview
 	} else if p.Multi {
-		p.Overall = []string{fmt.Sprintf("%d folders with code were read. Each has its own picture below, the riskiest first.", len(sections))}
+		p.Overall = []string{fmt.Sprintf("%d folders with code were read. The picture shows all of them together; each also has its own picture below, the riskiest first.", len(sections))}
+		cp := buildProject(Section{Name: "All folders", Graph: combined(sections)}, opt)
+		p.Combined = &cp
 		sort.SliceStable(p.Projects, func(i, j int) bool {
 			a, b := p.Projects[i].Counts, p.Projects[j].Counts
 			if a["high"] != b["high"] {

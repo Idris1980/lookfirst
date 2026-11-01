@@ -280,6 +280,12 @@ func (r *reader) read(bicep bool) {
 					r.g.Connect(me, to, "", false)
 				}
 			}
+			// "serverFarmId": "[variables('planId')]"
+			if varCall.MatchString(s) {
+				if to := r.resolveRef(s); to != "" && to != me {
+					r.g.Connect(me, to, "", false)
+				}
+			}
 		})
 		r.rules(it)
 	}
@@ -362,23 +368,52 @@ func (r *reader) resolve(expr string) string {
 		}
 		return m[1]
 	}
-	if strings.HasPrefix(expr, "[") {
-		return expr
+	// "[concat(variables('dataStorageName'), '/default/arenden')]" ->
+	// "dataStorageName/default/arenden", so a child shows its own name.
+	if m := concatCall.FindStringSubmatch(expr); m != nil {
+		var b strings.Builder
+		for _, a := range quoted.FindAllStringSubmatch(m[1], -1) {
+			if a[2] != "" {
+				b.WriteString(r.resolve(a[2] + "('" + a[3] + "')"))
+			} else {
+				b.WriteString(a[1])
+			}
+		}
+		if b.Len() > 0 {
+			return b.String()
+		}
 	}
 	return expr
 }
 
+var concatCall = regexp.MustCompile(`^\[concat\((.*)\)\]$`)
+
 // resolveRef finds the resource a dependsOn entry or resourceId() points at.
-func (r *reader) resolveRef(ref string) string {
+// Templates often keep ids in variables, as in
+// "hostStorageId": "[resourceId('Microsoft.Storage/storageAccounts', …)]"
+// and dependsOn: ["[variables('hostStorageId')]"], so variables are followed.
+func (r *reader) resolveRef(ref string) string { return r.resolveRefDepth(ref, 0) }
+
+func (r *reader) resolveRefDepth(ref string, depth int) string {
 	ref = strings.TrimSuffix(strings.TrimPrefix(ref, "["), "]")
+	if m := varCall.FindStringSubmatch(ref); m != nil && depth < 5 {
+		if s, ok := r.tmpl.Variables[m[1]].(string); ok && strings.HasPrefix(s, "[") {
+			return r.resolveRefDepth(s, depth+1)
+		}
+	}
 	var typ string
 	var names []string
-	if strings.HasPrefix(ref, "resourceId(") {
+	// resourceId, subscriptionResourceId, tenantResourceId and
+	// extensionResourceId(scope, type, name…) all name a type, then names.
+	if strings.Contains(ref, "esourceId(") {
 		args := quoted.FindAllStringSubmatch(ref, -1)
 		for _, a := range args {
 			v := a[1]
 			if a[2] != "" {
 				v = r.resolve(a[2] + "('" + a[3] + "')")
+				if strings.HasPrefix(v, "[") {
+					continue // the scope of an extension resource, such as acrId
+				}
 			}
 			if typ == "" && strings.Contains(v, "/") && strings.Contains(v, ".") {
 				typ = v

@@ -21,6 +21,11 @@ import (
 func DrawIO(w io.Writer, sections []Section) error {
 	var b strings.Builder
 	b.WriteString(`<mxfile host="LookFirst" type="device">` + "\n")
+	// Several folders: the first page holds all of them in one picture,
+	// with scripts joined to the templates they deploy.
+	if len(sections) > 1 {
+		sections = append([]Section{{Name: "All folders", Graph: combined(sections)}}, sections...)
+	}
 	for si, s := range sections {
 		g := s.Graph
 		l := layoutRows(g, 0)

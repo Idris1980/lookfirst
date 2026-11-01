@@ -26,4 +26,4 @@ node --test "vscode/test/*.test.js"
 
 ## Releases
 
-Pushing a tag such as `v0.14.0` (matching `vscode/package.json`) builds, signs and publishes a release through `.github/workflows/release.yml`.
+Pushing a tag such as `v0.14.1` (matching `vscode/package.json`) builds, signs and publishes a release through `.github/workflows/release.yml`.

@@ -126,6 +126,7 @@ details.inventory > summary h2 { display: inline; }
       {{with .Counts.medium}}<span class="chip medium">{{.}} medium</span>{{end}}
       {{with .Counts.low}}<span class="chip low">{{.}} low</span>{{end}}
     </div>
+    {{with .Combined}}{{if .Nodes}}{{template "picture" .}}{{end}}{{end}}
     <ul class="overview">
       {{range .Projects}}
       <li>
@@ -161,37 +162,7 @@ details.inventory > summary h2 { display: inline; }
   {{if .Nodes}}
   <section class="card">
     <h2>What would be built</h2>
-    <div class="diagram">
-      <svg width="{{.W}}" height="{{.H}}" viewBox="0 0 {{.W}} {{.H}}" role="img" aria-label="Diagram of what the code would build or touch, and how the parts connect">
-        <defs>
-          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0L10 5L0 10z"/></marker>
-          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow risky" d="M0 0L10 5L0 10z"/></marker>
-          {{.Symbols}}
-        </defs>
-        {{range .Cols}}<text class="coltitle" x="{{.X}}" y="28">{{.Title}}</text>{{end}}
-        {{range .Edges}}<path class="edge{{if .Risky}} risky{{end}}" d="{{.D}}" marker-end="{{if .Risky}}url(#ar){{else}}url(#a){{end}}"/>{{end}}
-        {{range .Edges}}{{if .Lines}}{{$e := .}}<text class="edgelabel{{if .Risky}} risky{{end}}" x="{{.LX}}" y="{{.LY}}">{{range $i, $l := .Lines}}<tspan x="{{$e.LX}}" dy="{{if $i}}12{{else}}0{{end}}">{{$l}}</tspan>{{end}}</text>{{end}}{{end}}
-        {{range .Nodes}}
-        {{if .Href}}<a class="nodelink" href="{{.Href}}">{{end}}
-        <g class="{{.Cat}}">
-          <title>{{.Tooltip}}</title>
-          <rect class="box{{if .Sev}} {{.Sev}}{{end}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/>
-          {{if .Official}}
-          <rect class="officialbg" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" rx="8"/>
-          <svg x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" viewBox="0 0 44 60"><use href="#ic-{{.Official}}" x="7" y="15" width="30" height="30"/></svg>
-          {{else}}
-          <rect class="iconbg" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" rx="8" fill="currentColor"/>
-          <svg class="icon" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" viewBox="-10 -12 44 48" stroke="currentColor">{{.Icon}}</svg>
-          {{end}}
-          <text class="name" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}20{{else}}25{{end}}">{{.Name}}</text>
-          <text class="friendly" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}35{{else}}41{{end}}">{{.Friendly}}</text>
-          {{if .Code}}<text class="code" x="{{.X}}" y="{{.Y}}" dx="53" dy="49">{{.Code}}</text>{{end}}
-          {{if .Sev}}<circle class="badge {{.Sev}}" cx="{{.X}}" cy="{{.Y}}" r="9" transform="translate({{.W}} 0)"/><text class="badgetext" x="{{.X}}" y="{{.Y}}" dx="{{.W}}" dy="4">{{.Count}}</text>{{end}}
-        </g>
-        {{if .Href}}</a>{{end}}
-        {{end}}
-      </svg>
-    </div>
+    {{template "picture" .}}
   </section>
   {{end}}
 
@@ -261,3 +232,36 @@ details.inventory > summary h2 { display: inline; }
 </main>
 </body>
 </html>
+{{define "picture"}}
+    <div class="diagram">
+      <svg width="{{.W}}" height="{{.H}}" viewBox="0 0 {{.W}} {{.H}}" role="img" aria-label="Diagram of what the code would build or touch, and how the parts connect">
+        <defs>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0L10 5L0 10z"/></marker>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow risky" d="M0 0L10 5L0 10z"/></marker>
+          {{.Symbols}}
+        </defs>
+        {{range .Cols}}<text class="coltitle" x="{{.X}}" y="28">{{.Title}}</text>{{end}}
+        {{range .Edges}}<path class="edge{{if .Risky}} risky{{end}}" d="{{.D}}" marker-end="{{if .Risky}}url(#ar){{else}}url(#a){{end}}"/>{{end}}
+        {{range .Edges}}{{if .Lines}}{{$e := .}}<text class="edgelabel{{if .Risky}} risky{{end}}" x="{{.LX}}" y="{{.LY}}">{{range $i, $l := .Lines}}<tspan x="{{$e.LX}}" dy="{{if $i}}12{{else}}0{{end}}">{{$l}}</tspan>{{end}}</text>{{end}}{{end}}
+        {{range .Nodes}}
+        {{if .Href}}<a class="nodelink" href="{{.Href}}">{{end}}
+        <g class="{{.Cat}}">
+          <title>{{.Tooltip}}</title>
+          <rect class="box{{if .Sev}} {{.Sev}}{{end}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/>
+          {{if .Official}}
+          <rect class="officialbg" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" rx="8"/>
+          <svg x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" viewBox="0 0 44 60"><use href="#ic-{{.Official}}" x="7" y="15" width="30" height="30"/></svg>
+          {{else}}
+          <rect class="iconbg" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" rx="8" fill="currentColor"/>
+          <svg class="icon" x="{{.X}}" y="{{.Y}}" width="44" height="{{.H}}" viewBox="-10 -12 44 48" stroke="currentColor">{{.Icon}}</svg>
+          {{end}}
+          <text class="name" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}20{{else}}25{{end}}">{{.Name}}</text>
+          <text class="friendly" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}35{{else}}41{{end}}">{{.Friendly}}</text>
+          {{if .Code}}<text class="code" x="{{.X}}" y="{{.Y}}" dx="53" dy="49">{{.Code}}</text>{{end}}
+          {{if .Sev}}<circle class="badge {{.Sev}}" cx="{{.X}}" cy="{{.Y}}" r="9" transform="translate({{.W}} 0)"/><text class="badgetext" x="{{.X}}" y="{{.Y}}" dx="{{.W}}" dy="4">{{.Count}}</text>{{end}}
+        </g>
+        {{if .Href}}</a>{{end}}
+        {{end}}
+      </svg>
+    </div>
+{{end}}

@@ -17,6 +17,11 @@ import (
 // angle brackets and backticks replaced, so a resource name cannot add
 // Mermaid directives, HTML or links of its own.
 func Mermaid(w io.Writer, sections []Section) error {
+	// Several folders become one picture, with scripts joined to the
+	// templates they deploy.
+	if len(sections) > 1 {
+		sections = []Section{{Name: "All folders", Graph: combined(sections)}}
+	}
 	var b strings.Builder
 	b.WriteString("flowchart LR\n")
 	n := 0
