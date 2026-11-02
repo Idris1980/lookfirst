@@ -274,7 +274,7 @@ func (r *reader) read(bicep bool) {
 		}
 		r.g.AddNode(&model.Node{
 			ID: id(it.typ, it.name), Name: name, Kind: e.kind, Friendly: e.friendly, Code: code,
-			Cloud: "azure", Type: it.typ, Category: e.category, File: r.file, Line: it.line,
+			Cloud: "azure", Type: it.typ, Category: e.category, File: r.file, Line: it.line, Address: r.addressOf(it),
 		})
 	}
 	for _, it := range r.items {
@@ -293,6 +293,22 @@ func (r *reader) read(bicep bool) {
 	r.parameters()
 }
 
+// addressOf is the address range of a virtual network or subnet.
+func (r *reader) addressOf(it *item) string {
+	p := it.res.Properties
+	if v := r.resolve(str(p["addressPrefix"])); v != "" && !strings.HasPrefix(v, "[") {
+		return v
+	}
+	for _, list := range []any{mapOf(p["addressSpace"])["addressPrefixes"], p["addressPrefixes"]} {
+		if l, ok := list.([]any); ok && len(l) > 0 {
+			if v := r.resolve(str(l[0])); !strings.HasPrefix(v, "[") {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
 func (r *reader) collect(raw json.RawMessage, parentType, parentName string, bicep bool) {
 	var res resource
 	if json.Unmarshal(raw, &res) != nil || res.Type == "" {
@@ -308,6 +324,22 @@ func (r *reader) collect(raw json.RawMessage, parentType, parentName string, bic
 	r.items = append(r.items, it)
 	for _, child := range res.Resources {
 		r.collect(child, typ, rawName, bicep)
+	}
+	// Subnets written inside the virtual network are subnets all the same:
+	// things are placed in them and security groups put on them.
+	if strings.EqualFold(typ, "Microsoft.Network/virtualNetworks") {
+		for _, sn := range list(res.Properties["subnets"]) {
+			m := mapOf(sn)
+			name := str(m["name"])
+			if name == "" {
+				continue
+			}
+			r.items = append(r.items, &item{
+				typ: "Microsoft.Network/virtualNetworks/subnets", rawName: rawName + "/" + name,
+				name: it.name + "/" + r.resolve(name), line: it.line,
+				res: resource{Type: "Microsoft.Network/virtualNetworks/subnets", Name: name, Properties: mapOf(m["properties"])},
+			})
+		}
 	}
 }
 
@@ -624,9 +656,6 @@ func (r *reader) securityRule(me string, p map[string]any, line int) {
 		return
 	}
 	sources := append(strs(p["sourceAddressPrefixes"]), r.resolve(str(p["sourceAddressPrefix"])))
-	if !risk.FromAnywhere(sources) {
-		return
-	}
 	var ports []string
 	for _, s := range append(strs(p["destinationPortRanges"]), str(p["destinationPortRange"])) {
 		if s == "" {
@@ -639,6 +668,15 @@ func (r *reader) securityRule(me string, p map[string]any, line int) {
 	}
 	if len(ports) == 0 {
 		ports = []string{"?"}
+	}
+	if !risk.FromAnywhere(sources) {
+		// Only some addresses: kept for the network picture.
+		for _, src := range sources {
+			if src != "" {
+				r.g.ConnectKind(model.AddressSource(src), me, risk.PortLabel(ports), model.Flow)
+			}
+		}
+		return
 	}
 	risk.OpenPorts(r.g, me, ports, r.file, line)
 }

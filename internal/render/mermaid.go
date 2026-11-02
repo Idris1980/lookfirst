@@ -25,6 +25,13 @@ func Mermaid(w io.Writer, sections []Section) error {
 	}
 	var b strings.Builder
 	b.WriteString("flowchart LR\n")
+	if len(sections) == 1 {
+		if nv, ok := buildNetwork(sections[0].Graph); ok {
+			mermaidNetwork(&b, sections[0].Graph, nv)
+			_, err := io.WriteString(w, b.String())
+			return err
+		}
+	}
 	n := 0
 	ids := map[string]string{}
 	var risky, access, hosting []int

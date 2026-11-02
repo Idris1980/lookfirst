@@ -50,6 +50,9 @@ type Node struct {
 	Category Category
 	File     string
 	Line     int
+	// Address is the address range of a network or subnet, e.g.
+	// "10.0.1.0/24", when the code spells it out.
+	Address string
 	// Hidden boxes are part of something else, such as a role assignment
 	// (drawn as a line with the right it gives) or a blob container (shown
 	// inside its storage account). They are left out of the picture but
@@ -85,7 +88,7 @@ func (g *Graph) HasMeaning() bool {
 	for _, e := range g.Edges {
 		// Lines from the internet are flows in every graph; they say
 		// nothing about whether the reader knew the other lines' meaning.
-		if e.From != InternetID && (e.Kind == Flow || e.Kind == Access || e.Kind == Hosting) {
+		if e.From != InternetID && !IsAddress(e.From) && (e.Kind == Flow || e.Kind == Access || e.Kind == Hosting) {
 			return true
 		}
 	}
@@ -213,6 +216,33 @@ func (g *Graph) Connect(from, to, label string, risky bool) {
 
 // InternetID is the one node that stands for everyone outside.
 const InternetID = "internet"
+
+// You is the line source for a rule that lets in only one address, such as
+// the one of the person running the script ($MyIp/32, $(curl ifconfig.me)).
+const You = "addr:you"
+
+// AddressSource is the line source for a firewall rule's source address:
+// You for a single address or one that is looked up when the script runs,
+// otherwise "addr:" and the range, such as "addr:10.0.3.0/24". No box is
+// drawn for it; a network picture turns it into "your IP", or into the
+// subnet with that range.
+func AddressSource(source string) string {
+	s := strings.Trim(strings.TrimSpace(source), `"'`)
+	lower := strings.ToLower(s)
+	switch {
+	case s == "":
+		return You
+	case strings.HasSuffix(s, "/32") || strings.ContainsAny(s, "$(") || strings.Contains(lower, "myip") || strings.Contains(lower, "ifconfig") || strings.Contains(lower, "checkip"):
+		return You
+	case !strings.Contains(s, "/") && strings.Count(s, ".") == 3:
+		return You // a single address written out
+	}
+	return "addr:" + s
+}
+
+// IsAddress reports whether a line source is an address rule rather than a
+// box.
+func IsAddress(id string) bool { return strings.HasPrefix(id, "addr:") }
 
 // Expose draws the internet and a line from it to the node.
 func (g *Graph) Expose(nodeID, label string, risky bool) {

@@ -33,6 +33,10 @@ var (
 	psStringVar = regexp.MustCompile(`^\s*\$(\w+)\s*=\s*["']([^"']+)["']\s*$`)
 	shStringVar = regexp.MustCompile(`^\s*(?:export\s+)?(\w+)=["']?([^"'\s;]+)["']?\s*$`)
 	scriptRoot  = regexp.MustCompile(`(?i)^(\$PSScriptRoot|\$\{PSScriptRoot\}|\$\(dirname\s+"?\$0"?\)|\$SCRIPT_DIR|\$\{SCRIPT_DIR\}|\.)[\\/]`)
+	// $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path,
+	// DIR=$(cd "$(dirname "$0")" && pwd) and the like: the script's folder.
+	rootDef    = regexp.MustCompile(`(?i)^\s*\$?(\w+)\s*=\s*.*(MyInvocation\.MyCommand|PSCommandPath|\$PSScriptRoot|dirname\s+"?\$(0|\{?BASH_SOURCE))`)
+	leadingVar = regexp.MustCompile(`^\$\{?(\w+)\}?[\\/]`)
 )
 
 // templateDeployments draws each template the script hands to the cloud.
@@ -42,7 +46,12 @@ func (s *scan) templateDeployments() {
 	}
 	lines := s.logicalLines()
 	vars := map[string]string{}
+	roots := map[string]bool{}
 	for _, l := range lines {
+		if m := rootDef.FindStringSubmatch(l.code); m != nil && !psJoinPath.MatchString(l.code) {
+			roots[strings.ToLower(m[1])] = true
+			continue
+		}
 		if m := psJoinPath.FindStringSubmatch(l.code); m != nil {
 			var parts []string
 			for _, q := range quotedPart.FindAllStringSubmatch(m[2], -1) {
@@ -69,6 +78,10 @@ func (s *scan) templateDeployments() {
 			}
 		}
 		v = scriptRoot.ReplaceAllString(v, "")
+		// A variable that holds the script's own folder.
+		if m := leadingVar.FindStringSubmatch(v); m != nil && roots[strings.ToLower(m[1])] {
+			v = v[len(m[0]):]
+		}
 		return path.Clean(strings.ReplaceAll(v, `\`, "/"))
 	}
 

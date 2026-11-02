@@ -272,3 +272,87 @@ func TestWrapLabel(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// A network is drawn as frames: the VPC around its subnets, the servers in
+// their subnet, the security groups' rules in the boxes, and arrows only
+// for traffic, from the internet through the gateway, from your IP, and
+// from one group of servers to another.
+func TestNetworkPicture(t *testing.T) {
+	g := &model.Graph{}
+	add := func(id, kind, friendly, address string) {
+		g.AddNode(&model.Node{ID: id, Name: id, Kind: kind, Friendly: friendly, Cloud: "aws", Address: address})
+	}
+	add("vpc", "network", "VPC in AWS", "10.0.0.0/16")
+	add("public", "subnet", "subnet in AWS", "10.0.1.0/24")
+	add("private", "subnet", "subnet in AWS", "10.0.2.0/24")
+	add("igw", "globe", "internet gateway in AWS", "")
+	add("web-sg", "shield", "security group in AWS", "")
+	add("bastion-sg", "shield", "security group in AWS", "")
+	add("db-sg", "shield", "security group in AWS", "")
+	add("web", "vm", "EC2 server in AWS", "")
+	add("bastion", "vm", "EC2 server in AWS", "")
+	for _, e := range [][2]string{{"public", "vpc"}, {"private", "vpc"}, {"igw", "vpc"}, {"web-sg", "vpc"}, {"bastion-sg", "vpc"}, {"db-sg", "vpc"},
+		{"web", "public"}, {"web", "web-sg"}, {"bastion", "public"}, {"bastion", "bastion-sg"}} {
+		g.Connect(e[0], e[1], "", false)
+	}
+	g.Expose("web-sg", "port 80, port 443", false)
+	g.ConnectKind(model.You, "bastion-sg", "port 22", model.Flow)
+	g.ConnectKind("bastion-sg", "web-sg", "port 22", model.Flow)
+	g.ConnectKind("web-sg", "db-sg", "port 3306", model.Flow)
+
+	nv, ok := buildNetwork(g)
+	if !ok {
+		t.Fatal("want a network picture")
+	}
+	if nv.parent["public"] != "vpc" || nv.parent["web"] != "public" || nv.parent["bastion"] != "public" {
+		t.Errorf("frames: %v", nv.parent)
+	}
+	for _, sg := range []string{"web-sg", "bastion-sg"} {
+		if _, drawn := nv.byID[sg]; drawn {
+			t.Errorf("%s protects a server and should be written in its box, not drawn", sg)
+		}
+	}
+	if _, drawn := nv.byID["db-sg"]; !drawn {
+		t.Error("a security group that protects nothing yet should be a box of its own")
+	}
+	want := map[[2]string]string{
+		{model.InternetID, "igw"}: "80, 443", {"igw", "web"}: "80, 443",
+		{model.You, "igw"}: "22", {"igw", "bastion"}: "22",
+		{"bastion", "web"}: "22", {"web", "db-sg"}: "3306",
+	}
+	got := map[[2]string]string{}
+	for _, a := range nv.arrows {
+		got[[2]string{a.from, a.to}] = a.label
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("arrow %s -> %s: got %q, want %q (all: %v)", k[0], k[1], got[k], v, got)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("arrows: %v", got)
+	}
+	notes := strings.Join(nv.byID["web"].notes, "|")
+	if !strings.Contains(notes, "80, 443 from anyone") || !strings.Contains(notes, "22 from bastion-sg") {
+		t.Errorf("web's rules: %q", notes)
+	}
+
+	var buf bytes.Buffer
+	if err := HTML(&buf, []Section{{Name: "v44", Graph: g}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `class="frame vnet aws"`) || !strings.Contains(buf.String(), "svg:has(.n0:hover)") {
+		t.Error("the report should draw the VPC as a frame and light up on hover")
+	}
+	var m bytes.Buffer
+	Mermaid(&m, []Section{{Graph: g}})
+	if !strings.Contains(m.String(), `subgraph f1["vpc  10.0.0.0/16"]`) {
+		t.Errorf("mermaid:\n%s", m.String())
+	}
+	var d bytes.Buffer
+	DrawIO(&d, []Section{{Graph: g}})
+	var doc struct{ XMLName xml.Name }
+	if err := xml.Unmarshal(d.Bytes(), &doc); err != nil {
+		t.Errorf("draw.io output is not valid XML: %v", err)
+	}
+}

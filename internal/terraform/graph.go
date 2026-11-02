@@ -35,9 +35,17 @@ func build(c *config) *model.Graph {
 		case strings.HasPrefix(r.typ, "azurerm_") || strings.HasPrefix(r.typ, "azapi_"):
 			cloud = "azure"
 		}
+		address, _ := str(r.body, "cidr_block")
+		if a, ok := r.body.Attributes["address_prefixes"]; ok && address == "" {
+			if v, ok := literal(a.Expr); ok && v.CanIterateElements() && v.LengthInt() > 0 {
+				if first := v.Index(cty.NumberIntVal(0)); first.Type() == cty.String {
+					address = first.AsString()
+				}
+			}
+		}
 		g.Nodes = append(g.Nodes, &model.Node{
 			ID: r.id(), Name: name, Kind: e.kind, Friendly: e.friendly, Code: r.id(),
-			Cloud: cloud, Type: r.typ, Category: e.category, File: r.file, Line: r.line,
+			Cloud: cloud, Type: r.typ, Category: e.category, File: r.file, Line: r.line, Address: address,
 		})
 	}
 

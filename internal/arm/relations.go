@@ -42,6 +42,7 @@ var roleWords = map[string]string{
 	"8e3af657-a8ff-443c-a75c-2fe8c4bcb635": "full control (Owner)",
 	"b24988ac-6180-42a0-ab88-20f7382dd24c": "full control (Contributor)",
 	"18d7d88d-d35e-4fb5-a5c3-7773c20a72d9": "may hand out access",
+	"72fafb9e-0641-4937-9268-a91bfd8191a3": "may read costs",
 }
 
 // roleShort is the same, said in a word or two after "may use", for a line
@@ -154,6 +155,13 @@ func classify(path []string, setting, s string, to *item) (string, string) {
 	switch {
 	case strings.HasPrefix(toType, "microsoft.managedidentity"):
 		return "signs in as", model.Hosting
+	case strings.Contains(p, "ipsecurityrestrictions"):
+		// An access restriction: the app lets in only traffic from there.
+		return "only lets in traffic from", model.Hosting
+	case last == "virtualnetworksubnetid" || last == "subnetresourceid":
+		// VNet integration: the app reaches the network through the
+		// subnet; it still answers on its own public address.
+		return "reaches the network through", model.Hosting
 	case last == "serverfarmid":
 		return "runs on", model.Hosting
 	case strings.Contains(p, "workspaceresourceid") || strings.Contains(p, "logs/workspace"):
@@ -202,9 +210,32 @@ func (r *reader) relations(it *item) {
 		r.roles = append(r.roles, it) // drawn in tidy, once every flow is known
 		return
 	}
-	walkProps(it.res.Properties, nil, "", func(path []string, setting, s string) {
-		for _, to := range r.refsIn(s) {
-			if to == me {
+	if typ == "microsoft.network/virtualnetworks/subnets" {
+		vnet, _, _ := strings.Cut(it.name, "/")
+		r.g.ConnectKind(me, id("Microsoft.Network/virtualNetworks", vnet), "in network", model.Hosting)
+	}
+	props := it.res.Properties
+	if typ == "microsoft.network/virtualnetworks" {
+		// Its subnets are items of their own, with their own lines.
+		props = map[string]any{}
+		for k, v := range it.res.Properties {
+			if k != "subnets" {
+				props[k] = v
+			}
+		}
+	}
+	walkProps(props, nil, "", func(path []string, setting, s string) {
+		refs := r.refsIn(s)
+		// A subnet's id names its network too; the subnet is what is meant.
+		subnetOf := map[string]bool{}
+		for _, to := range refs {
+			if t := r.itemByID(to); t != nil && strings.EqualFold(t.typ, "Microsoft.Network/virtualNetworks/subnets") {
+				vnet, _, _ := strings.Cut(t.name, "/")
+				subnetOf[id("Microsoft.Network/virtualNetworks", vnet)] = true
+			}
+		}
+		for _, to := range refs {
+			if to == me || subnetOf[to] {
 				continue
 			}
 			label, kind := classify(path, setting, s, r.itemByID(to))
@@ -223,7 +254,30 @@ func (r *reader) relations(it *item) {
 func (r *reader) roleAssignment(it *item, me string) {
 	p := it.res.Properties
 	principals := r.refsIn(str(p["principalId"]))
+	// A person or group from Entra ID, given when deploying: a box of its
+	// own, so the picture shows who gets access to what.
+	if m := paramRef.FindStringSubmatch(str(p["principalId"])); len(principals) == 0 && m != nil {
+		what := "user, group or app in Entra ID"
+		switch strings.ToLower(str(p["principalType"])) {
+		case "group":
+			what = "group in Entra ID"
+		case "user":
+			what = "user in Entra ID"
+		case "serviceprincipal":
+			what = "app in Entra ID"
+		}
+		pid := "arm.principal." + m[1]
+		r.g.AddNode(&model.Node{ID: pid, Name: m[1], Kind: "identity", Friendly: what, Code: "given when deploying",
+			Cloud: "azure", Type: "principal", Category: model.Security, File: r.file, Line: it.line})
+		principals = []string{pid}
+	}
 	scopes := r.refsIn(it.res.Scope)
+	if it.res.Scope == "" || strings.Contains(it.res.Scope, "resourceGroup()") {
+		gid := "arm.resourcegroup"
+		r.g.AddNode(&model.Node{ID: gid, Name: "resource group", Kind: "folder", Friendly: "everything in it",
+			Code: "the deployment's resource group", Cloud: "azure", Type: "resource group", Category: model.Other, File: r.file, Line: it.line})
+		scopes = []string{gid}
+	}
 	if len(principals) == 0 || len(scopes) == 0 {
 		return // drawn as a box of its own, as before
 	}
@@ -298,6 +352,15 @@ func (r *reader) roleIDs(expr string) []string {
 	return ids
 }
 
+// quietParts are settings of another resource, listed with everything
+// that is created but not drawn: the picture shows what they mean.
+var quietParts = map[string]bool{
+	"microsoft.web/sites/networkconfig":                       true, // VNet integration, a line from the app
+	"microsoft.storage/storageaccounts/managementpolicies":    true,
+	"microsoft.network/privatednszones/virtualnetworklinks":   true,
+	"microsoft.network/privateendpoints/privatednszonegroups": true,
+}
+
 // childOf are the parts of a storage account that are shown inside it.
 var childOf = []string{
 	"microsoft.storage/storageaccounts/blobservices/containers",
@@ -326,6 +389,11 @@ func (r *reader) tidy() {
 	}
 	for nodeID := range r.converted {
 		if n := r.g.Node(nodeID); n != nil && !hasFinding[nodeID] {
+			n.Hidden = true
+		}
+	}
+	for _, it := range r.items {
+		if n := r.g.Node(id(it.typ, it.name)); n != nil && quietParts[strings.ToLower(it.typ)] && !hasFinding[n.ID] {
 			n.Hidden = true
 		}
 	}

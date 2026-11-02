@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Idris1980/lookfirst/internal/model"
 	"github.com/Idris1980/lookfirst/internal/source"
 )
 
@@ -439,5 +440,54 @@ func TestStripComments(t *testing.T) {
 		if strings.Count(out, "\n") != strings.Count(c.in, "\n") {
 			t.Errorf("%s: line count changed", c.kind)
 		}
+	}
+}
+
+// az commands say what stands in which network and subnet, which group
+// protects it, and az vm create makes its own network, security group and
+// public address when the command does not name them. Names given through
+// variables are read.
+func TestAzureNetworkLinks(t *testing.T) {
+	sh := `VNET="vnet-a"
+RG="${RG:-rg-test}"
+az network vnet create -g "$RG" --name "$VNET" --address-prefixes 10.0.0.0/16 --subnet-name snet-web --subnet-prefixes 10.0.1.0/24
+az network vnet subnet create -g "$RG" --vnet-name "$VNET" --name snet-admin --address-prefixes 10.0.3.0/24
+az network nsg create -g "$RG" --name nsg-admin
+az network nsg rule create -g "$RG" --nsg-name nsg-admin -n ssh --priority 100 --destination-port-ranges 22 --source-address-prefixes $(curl -s https://ifconfig.me)
+az network vnet subnet update -g "$RG" --vnet-name "$VNET" --name snet-admin --network-security-group nsg-admin
+az vm create -g "$RG" -n jump --image Ubuntu2404 --vnet-name "$VNET" --subnet snet-admin --nsg "" --ssh-key-values ~/.ssh/id_rsa.pub
+az vm create -g "$RG" -n web --image Ubuntu2404
+`
+	g := Read([]source.File{{Path: "net.sh", Kind: source.Shell, Data: []byte(sh)}})
+	has := func(from, to, label string) {
+		t.Helper()
+		for _, e := range g.Edges {
+			if e.From == from && e.To == to && strings.Contains(e.Label, label) {
+				return
+			}
+		}
+		t.Errorf("no line %s -> %s %q", from, to, label)
+	}
+	has("azure.subnet.snet-web", "azure.network.vnet-a", "in network")
+	has("azure.subnet.snet-admin", "azure.network.vnet-a", "in network")
+	has("azure.subnet.snet-admin", "azure.shield.nsg-admin", "protected by")
+	has("azure.vm.jump", "azure.subnet.snet-admin", "in subnet")
+	has(model.You, "azure.shield.nsg-admin", "22")
+	if n := g.Node("azure.subnet.snet-web"); n == nil || n.Address != "10.0.1.0/24" {
+		t.Errorf("snet-web: %+v", n)
+	}
+	// web gets its own network and security group, with SSH open.
+	has("azure.vm.web", "azure.subnet.webSubnet", "in subnet")
+	has("azure.vm.web", "azure.shield.webNSG", "protected by")
+	for _, f := range g.Findings {
+		if f.NodeID == "azure.vm.jump" && strings.Contains(f.Title, "SSH") {
+			t.Errorf("--nsg \"\" puts no security group on the jump host, so az opens no port: %v", f)
+		}
+		if strings.Contains(f.Title, "Reads secrets") || strings.Contains(f.Detail, "your SSH keys") {
+			t.Errorf("a public key is not a secret: %v", f)
+		}
+	}
+	if n := g.Node("azure.disk.web_OsDisk"); n == nil || !n.Hidden {
+		t.Errorf("the OS disk az vm create makes should be listed: %+v", n)
 	}
 }

@@ -58,15 +58,17 @@ var friendly = map[source.Kind]string{
 func Read(files []source.File) *model.Graph {
 	g := &model.Graph{Titles: Titles}
 	local := localModules(files)
+	rules := &ruleBook{}
 	for _, f := range files {
 		g.Sources = append(g.Sources, f.Path)
-		s := &scan{g: g, f: f, me: "script." + f.Path, local: local}
+		s := &scan{g: g, f: f, me: "script." + f.Path, local: local, rules: rules}
 		g.AddNode(&model.Node{
 			ID: s.me, Name: filepath.Base(f.Path), Kind: "code", Friendly: friendly[f.Kind],
 			Category: model.Compute, File: f.Path, Line: 1,
 		})
 		s.run()
 	}
+	rules.apply(g)
 	return g
 }
 
@@ -76,6 +78,7 @@ type line struct {
 }
 
 type scan struct {
+	rules *ruleBook
 	g     *model.Graph
 	f     source.File
 	me    string
@@ -378,7 +381,7 @@ var (
 	// azAnyCreate is any other az … create, such as az search service create.
 	azAnyCreate = regexp.MustCompile(`^((?:[a-z0-9-]+\s+){1,3})create(\s|$)`)
 	// azPlumbing are create commands that only change or wire other things.
-	azPlumbing     = regexp.MustCompile(`(^|\s)(firewall-rule|rule|peering|secret|key|assignment\s+create\s+--assignee-object-id)\s+create\b|^(group|deployment\s+\S+|ad\s+\S+|tag)\s+create\b`)
+	azPlumbing     = regexp.MustCompile(`(^|\s)(firewall-rule|rule|peering|secret|key|dns-zone-group|link\s+vnet|record-set\s+\S+|assignment\s+create\s+--assignee-object-id)\s+create\b|^(group|deployment\s+\S+|ad\s+\S+|tag)\s+create\b`)
 	azBroadRole    = regexp.MustCompile(`(?i)--role\s+['"]?(Owner|Contributor|User Access Administrator)['"]?(\s|$)`)
 	azFirewallRule = regexp.MustCompile(`^((postgres|mysql)\s+(flexible-server\s+|server\s+)?|sql\s+server\s+)firewall-rule\s+create\b`)
 	windowsImage   = regexp.MustCompile(`(?i)win`)
@@ -466,18 +469,59 @@ func (s *scan) azureSettings(args string, byName map[string]string, ln int) {
 		if len(sources) == 0 {
 			sources = []string{"*"}
 		}
-		if !risk.FromAnywhere(sources) {
-			return
-		}
 		ports := azFlagList(args, "--destination-port-ranges")
 		if len(ports) == 0 {
 			ports = []string{"80"}
 		}
 		node := target("--nsg-name")
+		if name, _ := azFlag(args, "--nsg-name"); node == s.me && name != "" && s.g.Node(azID("shield", name)) != nil {
+			node = azID("shield", name) // made by another line of the script
+		}
+		if !risk.FromAnywhere(sources) {
+			// Only some addresses: kept for the network picture.
+			if name, _ := azFlag(args, "--nsg-name"); node == s.me && name != "" {
+				node = azID("shield", name) // made by another script in the folder
+			}
+			if node != s.me {
+				for _, src := range sources {
+					s.g.ConnectKind(model.AddressSource(src), node, risk.PortLabel(ports), model.Flow)
+				}
+				s.rules.created(args, node, sources, ports)
+			}
+			return
+		}
 		if node != s.me {
 			s.g.Expose(node, "", false)
 		}
 		risk.OpenPorts(s.g, node, ports, s.f.Path, ln)
+	case strings.HasPrefix(args, "network nsg rule update"):
+		// A new source for a rule, such as SSH only from the jump host's
+		// subnet. The rule may be made in another script, so it is applied
+		// when every script has been read.
+		if sources := azFlagList(args, "--source-address-prefixes"); len(sources) > 0 {
+			s.rules.updated(args, sources)
+		}
+	case strings.HasPrefix(args, "vm open-port"):
+		// az vm open-port allows the port from any address, on the VM's
+		// own security group.
+		if m := openPort.FindStringSubmatch("az " + args); m != nil {
+			node := target("--name", "-n")
+			if name, _ := azFlag(args, "--name", "-n"); node == s.me && name != "" {
+				node = azID("vm", name)
+			}
+			risk.OpenPorts(s.g, node, strings.Split(m[1], ","), s.f.Path, ln)
+		}
+	case strings.HasPrefix(args, "network vnet subnet update"), strings.HasPrefix(args, "network nic update"):
+		// A security group put on a subnet or network card afterwards.
+		name, _ := azFlag(args, "--name", "-n")
+		nsg, _ := azFlag(args, "--network-security-group", "--nsg")
+		kind := "subnet"
+		if strings.HasPrefix(args, "network nic") {
+			kind = "nic"
+		}
+		if name != "" && nsg != "" {
+			s.g.ConnectKind(azID(kind, name), azID("shield", nsg), "protected by", model.Hosting)
+		}
 	case strings.HasPrefix(args, "webapp config set") || strings.HasPrefix(args, "functionapp config set"):
 		node := target("--name", "-n")
 		if v, _ := azFlag(args, "--ftps-state"); strings.EqualFold(v, "AllAllowed") {
@@ -532,12 +576,13 @@ func (s *scan) azureCLI() {
 		}
 	}
 	byName := map[string]string{} // name given with --name -> node id
+	vars := stringVars(lines)
 	for _, l := range lines {
 		m := azCommand.FindStringSubmatch(l.code)
 		if m == nil {
 			continue
 		}
-		args := m[1]
+		args := expandVars(m[1], vars)
 		if azFirewallRule.MatchString(args) {
 			start, _ := azFlag(args, "--start-ip-address")
 			end, _ := azFlag(args, "--end-ip-address")
@@ -559,10 +604,12 @@ func (s *scan) azureCLI() {
 				name = c.friendly
 			}
 			id := "azure." + c.kind + "." + name
+			address, _ := azFlag(args, "--address-prefixes", "--address-prefix")
 			s.g.AddNode(&model.Node{ID: id, Name: name, Kind: c.kind, Friendly: c.friendly, Code: "az " + strings.Join(verb, " "),
-				Cloud: "azure", Type: "az " + strings.Join(verb, " "), Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n})
+				Cloud: "azure", Type: "az " + strings.Join(verb, " "), Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n, Address: address})
 			s.g.Connect(s.me, id, "", false)
 			byName[name] = id
+			s.azNetworkLinks(args, id, c.kind, strings.Join(verb, " "), l.n)
 			add := func(sev model.Severity, title, detail string) { s.g.Add(sev, id, title, detail, s.f.Path, l.n) }
 			cmd := strings.Join(verb, " ")
 			// Services that answer every network unless told otherwise.
@@ -637,6 +684,11 @@ func (s *scan) azureCLI() {
 				}
 				if v, ok := azFlag(args, "--public-ip-address"); ok && v == "" {
 					break // no public address
+				}
+				if _, ok := azFlag(args, "--nsg"); ok {
+					// --nsg "" means no security group on the network card, and
+					// a named one is used as it is: az adds no rule of its own.
+					break
 				}
 				port := 22
 				if image, _ := azFlag(args, "--image"); strings.EqualFold(rule, "rdp") || (!named && windowsImage.MatchString(image)) {
@@ -851,8 +903,9 @@ func (s *scan) awsCLI() {
 				verb = append(verb, w)
 			}
 			id := "aws." + c.kind + "." + name
+			cidr, _ := azFlag(args, "--cidr-block")
 			s.g.AddNode(&model.Node{ID: id, Name: name, Kind: c.kind, Friendly: c.friendly, Code: "aws " + strings.Join(verb, " "),
-				Cloud: "aws", Type: "aws " + strings.Join(verb, " "), Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n})
+				Cloud: "aws", Type: "aws " + strings.Join(verb, " "), Category: cloudColumn(c.kind), File: s.f.Path, Line: l.n, Address: cidr})
 			if variable != "" {
 				ids[variable] = id
 			}
@@ -913,7 +966,7 @@ func (s *scan) awsCLI() {
 			}
 			if src, _ := azFlag(args, "--source-group"); src != "" {
 				if from, ok := node(src); ok {
-					s.g.Connect(from, target, "port "+spec, false)
+					s.g.ConnectKind(from, target, "port "+spec, model.Flow)
 				}
 			}
 			// boto3 writes the short form as CidrIp, FromPort and ToPort.
@@ -925,14 +978,14 @@ func (s *scan) awsCLI() {
 					}
 				}
 			}
-			if cidr, _ := azFlag(args, "--cidr", "--cidr-ip"); risk.FromAnywhere([]string{cidr}) {
+			if cidr, ok := azFlag(args, "--cidr", "--cidr-ip"); risk.FromAnywhere([]string{cidr}) {
 				risk.OpenPorts(s.g, target, []string{spec}, s.f.Path, l.n)
+			} else if ok && target != s.me {
+				// Only some addresses: kept for the network picture.
+				s.g.ConnectKind(model.AddressSource(cidr), target, "port "+spec, model.Flow)
 			}
 			// The long form: --ip-permissions IpProtocol=…,FromPort=…,ToPort=…,IpRanges=[{CidrIp=…}].
 			for _, p := range ipPermission.FindAllStringSubmatch(args, -1) {
-				if !risk.FromAnywhere([]string{p[4]}) {
-					continue
-				}
 				spec := p[2]
 				switch {
 				case p[1] == "-1" || strings.EqualFold(p[1], "all"):
@@ -941,6 +994,12 @@ func (s *scan) awsCLI() {
 					spec = "?"
 				case p[3] != "" && p[3] != p[2]:
 					spec = p[2] + "-" + p[3]
+				}
+				if !risk.FromAnywhere([]string{p[4]}) {
+					if target != s.me {
+						s.g.ConnectKind(model.AddressSource(p[4]), target, "port "+spec, model.Flow)
+					}
+					continue
 				}
 				risk.OpenPorts(s.g, target, []string{spec}, s.f.Path, l.n)
 			}
@@ -1025,7 +1084,8 @@ var (
 		{regexp.MustCompile(`LaunchAgents|LaunchDaemons`), "the programs macOS starts automatically"},
 		{regexp.MustCompile(`\.ssh/authorized_keys`), "the list of keys allowed to log in over SSH"},
 	}
-	writesFile = regexp.MustCompile(`>>?\s*\S|,\s*['"][wa][b+]*['"]|writeFile|appendFile|Add-Content|Set-Content|Out-File|\btee\b|\.write\(|New-ItemProperty|Set-ItemProperty|\breg\s+add\b`)
+	publicKeyFile = regexp.MustCompile(`[\w./\\~${}:-]*\.pub\b`)
+	writesFile    = regexp.MustCompile(`>>?\s*\S|,\s*['"][wa][b+]*['"]|writeFile|appendFile|Add-Content|Set-Content|Out-File|\btee\b|\.write\(|New-ItemProperty|Set-ItemProperty|\breg\s+add\b`)
 )
 
 func (s *scan) files() {
@@ -1033,6 +1093,11 @@ func (s *scan) files() {
 	for _, sf := range sensitiveFiles {
 		s.each(sf.re, func(l line, _ []string) {
 			if s.f.Kind == source.Dockerfile || reported[sf.what] {
+				return
+			}
+			// A public key (id_rsa.pub) is meant to be shared; only the
+			// private half is a secret.
+			if sf.what == "your SSH keys" && !sf.re.MatchString(publicKeyFile.ReplaceAllString(l.code, "")) {
 				return
 			}
 			reported[sf.what] = true
@@ -1236,10 +1301,6 @@ func (s *scan) programsRun() {
 			if d.re.MatchString(l.code) {
 				s.add(model.High, "Destructive command", fmt.Sprintf("This line %s. Make sure it points at the right place before running it, and never run it in a loop or with a variable you have not checked.", d.what), l.n)
 			}
-		}
-		if m := openPort.FindStringSubmatch(l.code); m != nil {
-			// az vm open-port allows the port from any address.
-			risk.OpenPorts(s.g, s.me, strings.Split(m[1], ","), s.f.Path, l.n)
 		}
 		if m := cliSecretFlag.FindStringSubmatch(l.code); m != nil && !strings.HasPrefix(m[2], "$") {
 			risk.CheckSecret(s.g, s.me, m[1], m[2], s.f.Path, l.n, "read it from an environment variable or a key vault, and avoid passing secrets on the command line where they end up in shell history")

@@ -35,6 +35,13 @@ func DrawIO(w io.Writer, sections []Section) error {
 			name = "LookFirst"
 		}
 		fmt.Fprintf(&b, `  <diagram id="p%d" name="%s">`+"\n", si+1, xmlText(name))
+		if nv, ok := buildNetwork(g); ok {
+			fmt.Fprintf(&b, `    <mxGraphModel grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="%d" pageHeight="%d" math="0" shadow="0">`+"\n", nv.w+40, nv.h+40)
+			b.WriteString("      <root>\n        <mxCell id=\"0\"/>\n        <mxCell id=\"1\" parent=\"0\"/>\n")
+			drawioNetwork(&b, g, nv, root)
+			b.WriteString("      </root>\n    </mxGraphModel>\n  </diagram>\n")
+			continue
+		}
 		fmt.Fprintf(&b, `    <mxGraphModel grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="%d" pageHeight="%d" math="0" shadow="0">`+"\n", l.w+40, l.h+40)
 		b.WriteString("      <root>\n        <mxCell id=\"0\"/>\n        <mxCell id=\"1\" parent=\"0\"/>\n")
 

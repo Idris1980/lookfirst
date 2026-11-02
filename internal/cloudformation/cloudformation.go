@@ -71,6 +71,7 @@ func readFile(g *model.Graph, f source.File) {
 		g.AddNode(&model.Node{
 			ID: id(res.name), Name: res.name, Kind: e.kind, Friendly: e.friendly, Code: res.name + ": " + res.typ,
 			Cloud: "aws", Type: res.typ, Category: e.category, File: f.Path, Line: res.key.Line,
+			Address: yamlx.Str(yamlx.Get(res.props, "CidrBlock")),
 		})
 	}
 	// A line for every reference (!Ref, !GetAtt, !Sub, DependsOn) between

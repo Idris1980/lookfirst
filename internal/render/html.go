@@ -49,6 +49,23 @@ type svgNode struct {
 	Cat, Sev       string
 	Count          int
 	Href           template.URL // where a click goes, or "" outside VS Code
+	Notes          []svgText    // rules under the name, in a network picture
+	HL             string       // classes for lighting up what it is joined to
+	id             string
+}
+
+type svgText struct {
+	X, Y int
+	Text string
+}
+
+// svgFrame is a network or subnet drawn around the boxes in it.
+type svgFrame struct {
+	X, Y, W, H int
+	Title, Sub string
+	Class      string
+	Empty      string // shown in a subnet with nothing in it
+	Lines      []svgText
 }
 
 type svgEdge struct {
@@ -56,6 +73,9 @@ type svgEdge struct {
 	Risky  bool
 	Kind   string // model.Flow, Access, Hosting, Order or ""
 	below  bool   // the label hangs under the line and grows downwards
+	HL     string // classes for lighting up what it is joined to
+	from   string
+	to     string
 	Anchor string // "end" or "start" when the label lines up with LX that way; centred when empty
 	Label  string
 	Lines  []string // the label, one item per line so it fits between columns
@@ -146,6 +166,9 @@ type project struct {
 	NotRead      []string      // files in the folders that LookFirst did not read
 	Symbols      template.HTML // the official icons the picture uses, once each
 	Flow         bool          // the picture follows the flow; show what the lines mean
+	Network      bool          // networks and subnets are frames around the boxes
+	Frames       []svgFrame
+	HoverCSS     template.CSS // lights up a box's lines and neighbours on hover
 }
 
 type page struct {
@@ -199,67 +222,12 @@ func HTML(w io.Writer, sections []Section, opt Options) error {
 func buildProject(s Section, opt Options) project {
 	g := s.Graph
 	p := project{Name: s.Name, Summary: explain.Summary(g), Counts: map[string]int{}}
-	l := layout(g)
-	p.Cols, p.W, p.H, p.Flow = l.cols, l.w, l.h, l.flow
-	var used []string // official icons, for the symbols at the top of the picture
-
-	for _, n := range l.order {
-		pos := l.pos[n.ID]
-		sn := svgNode{
-			X: pos.x, Y: pos.y, W: nodeW, H: nodeH,
-			Name: clip(n.Name, 21), Friendly: clip(n.Friendly, 25), Code: clipCode(n.Code, 23),
-			Tooltip: n.Name + "\n" + n.Friendly, Icon: icon(n.Kind), Cat: strings.ToLower(n.Category.String()),
-			Official: cloudIconFor(n),
-		}
-		used = append(used, sn.Official)
-		if n.File != "" {
-			sn.Tooltip += fmt.Sprintf("\n%s:%d", n.File, n.Line)
-		}
-		if sev, ok := g.Worst(n.ID); ok {
-			sn.Sev = sev.String()
-			for _, f := range g.Findings {
-				if f.NodeID == n.ID {
-					sn.Count++
-				}
-			}
-		}
-		if n.Code != "" {
-			sn.Tooltip += "\n" + n.Code
-		}
-		// A click goes to the worst problem in the box, so the user lands
-		// where there is something to fix; without problems, to where the
-		// box is defined. Findings are sorted, so the first one is worst.
-		file, line := n.File, n.Line
-		for _, f := range g.Findings {
-			if f.NodeID == n.ID && f.File != "" {
-				file, line = f.File, f.Line
-				break
-			}
-		}
-		if sn.Href = reveal(opt, file, line); sn.Href != "" {
-			sn.Tooltip += "\nClick to open in the code"
-		}
-		p.Nodes = append(p.Nodes, sn)
+	if nv, ok := buildNetwork(g); ok {
+		networkPicture(&p, g, nv, opt)
+	} else {
+		drawPicture(&p, g, opt)
 	}
-
-	lanes := map[int]int{}
-	// How many lines leave and reach each box, to place the labels.
-	outs, ins := map[string]int{}, map[string]int{}
-	for _, e := range l.edges {
-		outs[e.From]++
-		ins[e.To]++
-	}
-	for _, e := range l.edges {
-		a, b := l.pos[e.From], l.pos[e.To]
-		se := edgePath(a, b, e, lanes, l.gap, l.flow, map[string]int{e.From: outs[e.From], e.To: ins[e.To]})
-		if se.Label != "" {
-			se.Lines = wrapLabel(se.Label, 24)
-			if !se.below {
-				se.LY -= 12 * (len(se.Lines) - 1) // grow upwards, away from the line
-			}
-		}
-		p.Edges = append(p.Edges, se)
-	}
+	highlight(&p)
 
 	for _, f := range g.Findings {
 		where := f.File
@@ -281,8 +249,126 @@ func buildProject(s Section, opt Options) project {
 	}
 	p.Inventory, p.Total = inventory(g, opt)
 	p.NotRead = g.NotRead
-	p.Symbols = iconSymbols(used)
 	return p
+}
+
+// drawPicture fills a project's picture with boxes in columns.
+func drawPicture(p *project, g *model.Graph, opt Options) {
+	l := layout(g)
+	p.Cols, p.W, p.H, p.Flow = l.cols, l.w, l.h, l.flow
+	var used []string // official icons, for the symbols at the top of the picture
+
+	for _, n := range l.order {
+		pos := l.pos[n.ID]
+		sn := boxFor(g, n, pos.x, pos.y, nodeH, opt)
+		sn.id = n.ID
+		used = append(used, sn.Official)
+		p.Nodes = append(p.Nodes, sn)
+	}
+
+	lanes := map[int]int{}
+	// How many lines leave and reach each box, to place the labels.
+	outs, ins := map[string]int{}, map[string]int{}
+	for _, e := range l.edges {
+		outs[e.From]++
+		ins[e.To]++
+	}
+	for _, e := range l.edges {
+		a, b := l.pos[e.From], l.pos[e.To]
+		se := edgePath(a, b, e, lanes, l.gap, l.flow, map[string]int{e.From: outs[e.From], e.To: ins[e.To]})
+		se.from, se.to = e.From, e.To
+		if se.Label != "" {
+			se.Lines = wrapLabel(se.Label, 24)
+			if !se.below {
+				se.LY -= 12 * (len(se.Lines) - 1) // grow upwards, away from the line
+			}
+		}
+		p.Edges = append(p.Edges, se)
+	}
+
+	p.Symbols = iconSymbols(used)
+}
+
+// highlight lets a box light up, when the mouse is over it, its own lines
+// and the boxes at their other ends, and fade the rest. It is CSS only
+// (:has), so the report still runs no script: box i has class ni, and
+// everything joined to it class ci.
+func highlight(p *project) {
+	index := map[string]int{}
+	for i, n := range p.Nodes {
+		if n.id != "" {
+			index[n.id] = i
+		}
+	}
+	joined := make([][]int, len(p.Nodes))
+	for i := range p.Nodes {
+		joined[i] = []int{i}
+	}
+	for k, e := range p.Edges {
+		a, okA := index[e.from]
+		b, okB := index[e.to]
+		var cls []string
+		if okA {
+			cls = append(cls, fmt.Sprintf("c%d", a))
+		}
+		if okB {
+			cls = append(cls, fmt.Sprintf("c%d", b))
+		}
+		if okA && okB {
+			joined[a] = append(joined[a], b)
+			joined[b] = append(joined[b], a)
+		}
+		p.Edges[k].HL = strings.Join(cls, " ")
+	}
+	var css strings.Builder
+	for i := range p.Nodes {
+		cls := []string{fmt.Sprintf("n%d", i)}
+		for _, j := range joined[i] {
+			cls = append(cls, fmt.Sprintf("c%d", j))
+		}
+		p.Nodes[i].HL = strings.Join(cls, " ")
+		fmt.Fprintf(&css, "svg:has(.n%d:hover) .hl:not(.c%d){opacity:.12}", i, i)
+	}
+	p.HoverCSS = template.CSS(css.String())
+}
+
+// boxFor is the box for a node in the picture: its names, icon, how many
+// problems it has, and where a click goes.
+func boxFor(g *model.Graph, n *model.Node, x, y, h int, opt Options) svgNode {
+	sn := svgNode{
+		X: x, Y: y, W: nodeW, H: h,
+		Name: clip(n.Name, 21), Friendly: clip(n.Friendly, 25), Code: clipCode(n.Code, 23),
+		Tooltip: n.Name + "\n" + n.Friendly, Icon: icon(n.Kind), Cat: strings.ToLower(n.Category.String()),
+		Official: cloudIconFor(n),
+	}
+	if n.File != "" {
+		sn.Tooltip += fmt.Sprintf("\n%s:%d", n.File, n.Line)
+	}
+	if sev, ok := g.Worst(n.ID); ok {
+		sn.Sev = sev.String()
+		for _, f := range g.Findings {
+			if f.NodeID == n.ID {
+				sn.Count++
+			}
+		}
+	}
+	if n.Code != "" {
+		sn.Tooltip += "\n" + n.Code
+	}
+	// A click goes to the worst problem in the box, so the user lands
+	// where there is something to fix; without problems, to where the
+	// box is defined. Findings are sorted, so the first one is worst.
+	file, line := n.File, n.Line
+	for _, f := range g.Findings {
+		if f.NodeID == n.ID && f.File != "" {
+			file, line = f.File, f.Line
+			break
+		}
+	}
+	if sn.Href = reveal(opt, file, line); sn.Href != "" {
+		sn.Tooltip += "\nClick to open in the code"
+	}
+	return sn
 }
 
 // inventory lists every box in the picture by column, so nothing is hidden
