@@ -20,6 +20,12 @@ func Text(w io.Writer, sections []Section) {
 		}
 		text(w, s.Graph)
 	}
+	all := &model.Graph{}
+	for _, s := range sections {
+		all.Merge(s.Graph)
+	}
+	all.Sort()
+	Chain(w, all)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, explain.Disclaimer)
 }

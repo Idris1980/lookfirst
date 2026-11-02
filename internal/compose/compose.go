@@ -50,7 +50,7 @@ func readFile(g *model.Graph, f source.File) {
 		image := yamlx.Str(yamlx.Get(svc, "image"))
 		node := &model.Node{
 			ID: id(k.Value), Name: k.Value, Kind: "container", Friendly: "container", Code: "services." + k.Value,
-			Category: model.Compute, File: f.Path, Line: k.Line,
+			Type: "compose service", Category: model.Compute, File: f.Path, Line: k.Line,
 		}
 		if image != "" {
 			node.Friendly = "container · " + image
@@ -65,7 +65,7 @@ func readFile(g *model.Graph, f source.File) {
 	yamlx.Pairs(yamlx.Get(docs[0], "volumes"), func(k, _ *yaml.Node) {
 		g.AddNode(&model.Node{
 			ID: "volume." + k.Value, Name: k.Value, Kind: "storage", Friendly: "Docker volume", Code: "volumes." + k.Value,
-			Category: model.Data, File: f.Path, Line: k.Line,
+			Type: "compose volume", Category: model.Data, File: f.Path, Line: k.Line,
 		})
 	})
 

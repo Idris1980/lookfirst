@@ -99,7 +99,7 @@ func (s *scan) azVMParts(args, id, vnet, subnet string, ln int, add func(*model.
 
 var (
 	shVar = regexp.MustCompile(`^\s*(?:export\s+|local\s+|readonly\s+|declare\s+)?(\w+)=(?:"([^"]*)"|'([^']*)'|([^\s;"'` + "`" + `]*))\s*$`)
-	psVar = regexp.MustCompile(`(?i)^\s*\$(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)')\s*$`)
+	psVar = regexp.MustCompile(`(?i)^\s*(?:\[[^\]]+\]\s*)*\$(\w+)\s*=\s*(?:"([^"]*)"|'([^']*)')\s*,?\s*\)?\s*$`)
 	// ${RG:-rg-novatrix-v34}: the default when the variable is not set.
 	withDefault = regexp.MustCompile(`^\$\{\w+:-([^}]*)\}$`)
 	useVar      = regexp.MustCompile(`\$\{(\w+)\}|\$(\w+)`)

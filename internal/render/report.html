@@ -9,7 +9,7 @@
 <style>
 :root {
   --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5d6673; --line: #d9dde3;
-  --frame: #9aa5b4; --frame-bg: rgba(120,130,150,.05); --flow: #4a6a8f; --access: #8250df; --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
+  --accent: #0969da; --accent-bg: rgba(9,105,218,.08); --frame: #9aa5b4; --frame-bg: rgba(120,130,150,.05); --flow: #4a6a8f; --access: #8250df; --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
   --low: #2f6fb3; --low-bg: #e6f0fb;
   --c-internet: #6b7280; --c-network: #2563eb; --c-security: #7c3aed; --c-compute: #0f8a7e;
   --c-data: #c2410c; --c-other: #64748b;
@@ -17,7 +17,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #111418; --card: #1a1f25; --text: #e6e9ee; --muted: #9aa4b2; --line: #2c333c;
-    --frame: #5d6878; --frame-bg: rgba(200,210,230,.04); --flow: #8fb3dc; --access: #b392f0; --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
+    --accent: #58a6ff; --accent-bg: rgba(88,166,255,.12); --frame: #5d6878; --frame-bg: rgba(200,210,230,.04); --flow: #8fb3dc; --access: #b392f0; --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
     --low: #6aa8ff; --low-bg: #16273d;
     --c-internet: #9ca3af; --c-network: #6b9bff; --c-security: #a78bfa; --c-compute: #2dd4bf;
     --c-data: #fb923c; --c-other: #94a3b8;
@@ -26,14 +26,14 @@
 /* Inside VS Code the editor theme decides, not the system setting. */
 body.vscode-light {
   --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5d6673; --line: #d9dde3;
-  --frame: #9aa5b4; --frame-bg: rgba(120,130,150,.05); --flow: #4a6a8f; --access: #8250df; --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
+  --accent: #0969da; --accent-bg: rgba(9,105,218,.08); --frame: #9aa5b4; --frame-bg: rgba(120,130,150,.05); --flow: #4a6a8f; --access: #8250df; --edge: #8a94a3; --high: #d1242f; --high-bg: #fde8e8; --medium: #b35900; --medium-bg: #fff1dc;
   --low: #2f6fb3; --low-bg: #e6f0fb;
   --c-internet: #6b7280; --c-network: #2563eb; --c-security: #7c3aed; --c-compute: #0f8a7e;
   --c-data: #c2410c; --c-other: #64748b;
 }
 body.vscode-dark, body.vscode-high-contrast:not(.vscode-high-contrast-light) {
   --bg: #111418; --card: #1a1f25; --text: #e6e9ee; --muted: #9aa4b2; --line: #2c333c;
-  --frame: #5d6878; --frame-bg: rgba(200,210,230,.04); --flow: #8fb3dc; --access: #b392f0; --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
+  --accent: #58a6ff; --accent-bg: rgba(88,166,255,.12); --frame: #5d6878; --frame-bg: rgba(200,210,230,.04); --flow: #8fb3dc; --access: #b392f0; --edge: #6b7686; --high: #ff6b6b; --high-bg: #3a1c1f; --medium: #ffb454; --medium-bg: #3a2a14;
   --low: #6aa8ff; --low-bg: #16273d;
   --c-internet: #9ca3af; --c-network: #6b9bff; --c-security: #a78bfa; --c-compute: #2dd4bf;
   --c-data: #fb923c; --c-other: #94a3b8;
@@ -81,6 +81,27 @@ svg { display: block; font-family: inherit; }
 .frameempty { font-style: italic; }
 .note { font-size: 10.5px; fill: var(--text); opacity: .85; white-space: pre; }
 .hl { transition: opacity .15s; }
+.chain h3 { margin: 18px 0 6px; font-size: 15px; }
+.chain .hint { color: var(--muted); margin-top: 0; }
+ol.steps { list-style: none; margin: 0; padding: 0; }
+ol.steps ol.steps { margin-left: 8px; border-left: 2px solid var(--line); padding-left: 12px; }
+li.step { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+li.step:first-child { border-top: none; }
+li.step .num { min-width: 34px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+li.step .body { flex: 1; min-width: 0; border-radius: 6px; }
+li.step .body:hover { background: var(--accent-bg); }
+li.step .says { font-weight: 500; }
+li.step.deletes .says { color: var(--high); }
+li.step.skipped { opacity: .6; }
+li.step .note-line { font-size: 13px; color: var(--muted); }
+li.step .where { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+li.step .where code { font-size: 11.5px; }
+.steprisk { font-size: 13px; margin-top: 3px; }
+.steprisk .sev { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; }
+.steprisk.high .sev { background: var(--high-bg); color: var(--high); }
+.steprisk.medium .sev { background: var(--medium-bg); color: var(--medium); }
+.steprisk.low .sev { background: var(--low-bg); color: var(--low); }
+details.sub > summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 4px; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
 .legend svg { display: inline-block; vertical-align: middle; margin-right: 6px; }
 .arrow.risky { fill: var(--high); }
@@ -140,6 +161,18 @@ details.inventory > summary h2 { display: inline; }
 <body>
 <main>
   <h1>LookFirst report</h1>
+  {{if .ChainCSS}}<style>{{.ChainCSS}}</style>{{end}}
+  {{if .Chains}}
+  <section class="card chain">
+    <h2>What happens, step by step</h2>
+    <p class="hint">Everything the code would do, in the order it would do it, read without running anything. A step's risks are shown under it.</p>
+    {{range .Chains}}
+    <h3>{{.Title}}</h3>
+    {{template "steps" .Items}}
+    {{end}}
+  </section>
+  {{end}}
+
   {{if .Multi}}
   <section class="card summary">
     <h2>Overview</h2>
@@ -255,6 +288,19 @@ details.inventory > summary h2 { display: inline; }
 </main>
 </body>
 </html>
+{{define "steps"}}<ol class="steps">{{range .}}
+      <li class="step {{.Keys}}{{if .Deletes}} deletes{{end}}{{if .Skipped}} skipped{{end}}{{with .Worst}} worst-{{.}}{{end}}">
+        <span class="num">{{if .Skipped}}–{{else}}{{.Num}}{{end}}</span>
+        <div class="body">
+          <div class="says">{{.Says}}</div>
+          {{if .Note}}<div class="note-line">{{.Note}}</div>{{end}}
+          {{if .From}}<div class="note-line">Takes <code>{{.From}}</code> from your computer.</div>{{end}}
+          {{if .Where}}<div class="where">{{if .Href}}<a href="{{.Href}}">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if .Code}} · <code>{{.Code}}</code>{{end}}</div>{{end}}
+          {{range .Risks}}<div class="steprisk {{.Sev}}"><span class="sev">{{.Sev}}</span> {{if .Href}}<a href="{{.Href}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</div>{{end}}
+          {{if .Sub}}<details class="sub"{{if lt .Count 25}} open{{end}}><summary>{{len .Sub}} steps inside</summary>{{template "steps" .Sub}}</details>{{end}}
+        </div>
+      </li>{{end}}
+    </ol>{{end}}
 {{define "picture"}}
     <div class="diagram">
       <svg width="{{.W}}" height="{{.H}}" viewBox="0 0 {{.W}} {{.H}}" role="img" aria-label="Diagram of what the code would build or touch, and how the parts connect">

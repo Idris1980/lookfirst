@@ -39,12 +39,11 @@ var (
 	leadingVar = regexp.MustCompile(`^\$\{?(\w+)\}?[\\/]`)
 )
 
-// templateDeployments draws each template the script hands to the cloud.
-func (s *scan) templateDeployments() {
-	if s.f.Kind != source.Shell && s.f.Kind != source.PowerShell {
-		return
-	}
-	lines := s.logicalLines()
+// pathResolver turns a path in a script into one relative to the script:
+// "$PSScriptRoot	emplates\main.json", a variable set with Join-Path or
+// to a string, or one that starts with a variable holding the script's
+// own folder ($scriptDir = Split-Path … $MyInvocation…).
+func pathResolver(lines []line) func(string) string {
 	vars := map[string]string{}
 	roots := map[string]bool{}
 	for _, l := range lines {
@@ -68,9 +67,9 @@ func (s *scan) templateDeployments() {
 			vars[strings.ToLower(m[1])] = m[2]
 		}
 	}
-	resolve := func(v string) string {
+	return func(v string) string {
 		v = strings.Trim(v, `"'@`)
-		v = strings.TrimPrefix(v, "file://")
+		v = strings.TrimPrefix(strings.TrimPrefix(v, "fileb://"), "file://")
 		if strings.HasPrefix(v, "$") {
 			name := strings.ToLower(strings.Trim(strings.TrimPrefix(v, "$"), "{}"))
 			if known, ok := vars[name]; ok {
@@ -84,6 +83,15 @@ func (s *scan) templateDeployments() {
 		}
 		return path.Clean(strings.ReplaceAll(v, `\`, "/"))
 	}
+}
+
+// templateDeployments draws each template the script hands to the cloud.
+func (s *scan) templateDeployments() {
+	if s.f.Kind != source.Shell && s.f.Kind != source.PowerShell {
+		return
+	}
+	lines := s.logicalLines()
+	resolve := pathResolver(lines)
 
 	for _, l := range lines {
 		for _, d := range deployCmds {

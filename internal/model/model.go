@@ -50,6 +50,13 @@ type Node struct {
 	Category Category
 	File     string
 	Line     int
+	// Condition is set when the thing is only built in some deployments:
+	// the name of the parameter that decides it, such as "deployContainer",
+	// or "!name" when it is built when the parameter is false.
+	Condition string
+	// Note says in words what it does, when its name and kind do not, such
+	// as "gives funcName: may read and write blobs on dataStorageName".
+	Note string
 	// Address is the address range of a network or subnet, e.g.
 	// "10.0.1.0/24", when the code spells it out.
 	Address string
@@ -143,7 +150,39 @@ type Finding struct {
 	Line     int
 }
 
+// Step is one thing that happens when the code is run, in the order it
+// happens: a command in a script, or a resource a template builds.
+type Step struct {
+	File    string
+	Line    int
+	Code    string // the command, shortened
+	Says    string // what it does, in plain English
+	Creates []string
+	Changes []string // what it changes, uploads to or starts
+	Deletes bool
+	// From is what it takes from your computer, such as a folder of code
+	// or a Dockerfile's folder, relative to the script.
+	From string
+	// Template is a template it hands to the cloud to build, relative to
+	// the script, with the parameters given on the command line.
+	Template string
+	Params   map[string]string
+	// Output is a template output it uses ("funcName"), for what it
+	// changes, when the name is only known once the template has run.
+	Output string
+	// Runs is another script it runs, relative to this one.
+	Runs string
+}
+
 type Graph struct {
+	// Steps are what happens, in order, when the code is run.
+	Steps []Step
+	// Outputs are a template's outputs, by "file|name", and the box each
+	// names. Defaults are its parameters' default values, by "file|name".
+	Outputs  map[string]string
+	Defaults map[string]string
+	// After are, for a script, the other scripts it says must run first.
+	After   map[string][]string
 	Sources []string // the files that were read
 	// NotRead are files in the folders that LookFirst did not read, because
 	// it does not know their kind. They are listed so nothing is missed in
@@ -184,6 +223,25 @@ func (g *Graph) Merge(other *Graph) {
 	}
 	g.Edges = append(g.Edges, other.Edges...)
 	g.Findings = append(g.Findings, other.Findings...)
+	g.Steps = append(g.Steps, other.Steps...)
+	for k, v := range other.Outputs {
+		if g.Outputs == nil {
+			g.Outputs = map[string]string{}
+		}
+		g.Outputs[k] = v
+	}
+	for k, v := range other.After {
+		if g.After == nil {
+			g.After = map[string][]string{}
+		}
+		g.After[k] = append(g.After[k], v...)
+	}
+	for k, v := range other.Defaults {
+		if g.Defaults == nil {
+			g.Defaults = map[string]string{}
+		}
+		g.Defaults[k] = v
+	}
 }
 
 // AddNode adds n unless a node with its ID exists, and returns the node

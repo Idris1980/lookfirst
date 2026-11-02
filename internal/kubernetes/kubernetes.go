@@ -79,7 +79,7 @@ func Read(files []source.File) *model.Graph {
 	for _, o := range objs {
 		n := &model.Node{
 			ID: o.id(), Name: o.name, Friendly: strings.ToLower(o.kind), Code: o.kind + "/" + o.name,
-			Kind: "generic", Category: model.Other, File: o.file, Line: o.line,
+			Kind: "generic", Type: "Kubernetes " + o.kind, Category: model.Other, File: o.file, Line: o.line,
 		}
 		if _, ok := workload[o.kind]; ok {
 			n.Kind, n.Category = "container", model.Compute

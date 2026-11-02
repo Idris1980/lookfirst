@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Idris1980/lookfirst/internal/advice"
+	"github.com/Idris1980/lookfirst/internal/chain"
 	"github.com/Idris1980/lookfirst/internal/explain"
 	"github.com/Idris1980/lookfirst/internal/model"
 )
@@ -43,6 +44,7 @@ func Markdown(w io.Writer, sections []Section, changed map[string]bool) {
 			fmt.Fprintf(w, "**%d high · %d medium · %d low** in the changed files.\n\n", c["high"], c["medium"], c["low"])
 			table(w, all, mine, maxCommentRows)
 		}
+		chainMarkdown(w, all)
 		picture(w, sections)
 		c := counts(all.Findings)
 		fmt.Fprintf(w, "<details><summary>Everything that was read: %d high · %d medium · %d low</summary>\n\n", c["high"], c["medium"], c["low"])
@@ -66,6 +68,7 @@ func Markdown(w io.Writer, sections []Section, changed map[string]bool) {
 	} else {
 		fmt.Fprintf(w, "**%d high · %d medium · %d low**\n\n", c["high"], c["medium"], c["low"])
 	}
+	chainMarkdown(w, all)
 	rows := 0
 	for _, s := range sections {
 		if len(sections) > 1 {
@@ -151,4 +154,43 @@ func md(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// chainMarkdown writes what happens, step by step, folded so a pull
+// request comment stays short: every step, its risks under it.
+func chainMarkdown(w io.Writer, g *model.Graph) {
+	all := *g
+	all.Sort()
+	chains := chain.Build(&all)
+	if len(chains) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "<details><summary>What happens, step by step</summary>\n\n")
+	var write func(items []chain.Item, depth int)
+	write = func(items []chain.Item, depth int) {
+		for _, it := range items {
+			num := it.Num
+			if it.Skipped {
+				num = "–"
+			}
+			line := md(it.Says)
+			if it.Deletes {
+				line = "**" + line + "**"
+			}
+			if it.Note != "" {
+				line += " _(" + md(it.Note) + ")_"
+			}
+			fmt.Fprintf(w, "%s- %s %s\n", strings.Repeat("  ", depth), num, line)
+			for _, r := range it.Risks {
+				fmt.Fprintf(w, "%s  - :warning: %s: %s\n", strings.Repeat("  ", depth), strings.ToUpper(r.Severity.String()), md(r.Title))
+			}
+			write(it.Sub, depth+1)
+		}
+	}
+	for _, c := range chains {
+		fmt.Fprintf(w, "**%s**\n\n", md(c.Title))
+		write(c.Items, 0)
+		fmt.Fprintln(w)
+	}
+	fmt.Fprintf(w, "</details>\n\n")
 }

@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: Idris1980/lookfirst@v0.16.0
+      - uses: Idris1980/lookfirst@v0.17.0
         with:
           path: .          # files or folders, separated by spaces
           fail-on: high    # or medium, low, none

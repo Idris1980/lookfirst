@@ -117,6 +117,18 @@ var catalog = map[string]entry{
 	"microsoft.synapse/workspaces":                                       {"database", "Synapse workspace", model.Data},
 	"microsoft.datafactory/factories":                                    {"relay", "Data Factory", model.Data},
 	"microsoft.eventgrid/topics":                                         {"relay", "Event Grid topic", model.Data},
+	"microsoft.eventgrid/systemtopics":                                   {"relay", "Event Grid system topic", model.Data},
+	"microsoft.eventgrid/eventsubscriptions":                             {"relay", "Event Grid subscription", model.Data},
+	"microsoft.eventgrid/systemtopics/eventsubscriptions":                {"relay", "Event Grid subscription", model.Data},
+	"microsoft.communication/communicationservices":                      {"relay", "Communication Services", model.Data},
+	"microsoft.communication/emailservices":                              {"relay", "Email Communication Service", model.Data},
+	"microsoft.communication/emailservices/domains":                      {"dns", "email domain", model.Data},
+	"microsoft.botservice/botservices":                                   {"function", "Azure Bot", model.Compute},
+	"microsoft.botservice/botservices/channels":                          {"relay", "bot channel", model.Compute},
+	"microsoft.insights/autoscalesettings":                               {"monitor", "autoscale rules", model.Other},
+	"microsoft.insights/datacollectionrules":                             {"monitor", "data collection rule", model.Other},
+	"microsoft.insights/datacollectionruleassociations":                  {"monitor", "data collection rule link", model.Other},
+	"microsoft.consumption/budgets":                                      {"monitor", "budget", model.Other},
 	"microsoft.servicebus/namespaces/queues":                             {"relay", "Service Bus queue", model.Data},
 	"microsoft.eventhub/namespaces/eventhubs":                            {"relay", "event hub", model.Data},
 	"microsoft.recoveryservices/vaults":                                  {"storage", "backup vault", model.Data},
@@ -155,6 +167,9 @@ type template struct {
 	} `json:"parameters"`
 	Variables map[string]any  `json:"variables"`
 	Resources json.RawMessage `json:"resources"`
+	Outputs   map[string]struct {
+		Value any `json:"value"`
+	} `json:"outputs"`
 }
 
 type resource struct {
@@ -166,6 +181,7 @@ type resource struct {
 	Properties map[string]any    `json:"properties"`
 	Resources  []json.RawMessage `json:"resources"`
 	Kind       string            `json:"kind"`
+	Condition  any               `json:"condition"`
 }
 
 type item struct {
@@ -275,6 +291,7 @@ func (r *reader) read(bicep bool) {
 		r.g.AddNode(&model.Node{
 			ID: id(it.typ, it.name), Name: name, Kind: e.kind, Friendly: e.friendly, Code: code,
 			Cloud: "azure", Type: it.typ, Category: e.category, File: r.file, Line: it.line, Address: r.addressOf(it),
+			Condition: conditionOf(it.res.Condition),
 		})
 	}
 	for _, it := range r.items {
@@ -290,7 +307,54 @@ func (r *reader) read(bicep bool) {
 		r.rules(it)
 	}
 	r.tidy()
+	r.outputs()
 	r.parameters()
+}
+
+var notParam = regexp.MustCompile(`^\[not\(parameters\('([^']+)'\)\)\]$`)
+
+// conditionOf is the parameter that decides whether a resource is built:
+// "[parameters('deployContainer')]" gives "deployContainer", and
+// "[not(parameters('x'))]" gives "!x". Other conditions are kept as they
+// are written.
+func conditionOf(c any) string {
+	s, ok := c.(string)
+	if !ok {
+		if b, isBool := c.(bool); isBool && !b {
+			return "false"
+		}
+		return ""
+	}
+	if m := notParam.FindStringSubmatch(s); m != nil {
+		return "!" + m[1]
+	}
+	if m := paramCall.FindStringSubmatch(s); m != nil && strings.Count(s, "(") == 1 {
+		return m[1]
+	}
+	return s
+}
+
+// outputs records what each output of the template names, so a script
+// that uses $out.funcName.value is known to mean the function app, and the
+// parameters' defaults, which decide what a deployment builds.
+func (r *reader) outputs() {
+	for name, p := range r.tmpl.Parameters {
+		if p.DefaultValue != nil {
+			if r.g.Defaults == nil {
+				r.g.Defaults = map[string]string{}
+			}
+			r.g.Defaults[r.file+"|"+name] = fmt.Sprint(p.DefaultValue)
+		}
+	}
+	for name, o := range r.tmpl.Outputs {
+		v, _ := o.Value.(string)
+		if refs := r.refsIn(v); len(refs) > 0 && !strings.Contains(v, "concat(") && !strings.Contains(v, "format(") {
+			if r.g.Outputs == nil {
+				r.g.Outputs = map[string]string{}
+			}
+			r.g.Outputs[r.file+"|"+name] = refs[0]
+		}
+	}
 }
 
 // addressOf is the address range of a virtual network or subnet.

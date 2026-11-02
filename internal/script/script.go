@@ -69,7 +69,36 @@ func Read(files []source.File) *model.Graph {
 		s.run()
 	}
 	rules.apply(g)
+	scriptOrder(g, files)
 	return g
+}
+
+var afterWords = regexp.MustCompile(`(?i)\b(efter|after|first|before|först|requires|kräver|förutsätter)\b`)
+
+// scriptOrder notes, for each script, the other scripts in the folder it
+// says must be run before it ("Körs EFTER natverk-novatrix.sh").
+func scriptOrder(g *model.Graph, files []source.File) {
+	for _, f := range files {
+		if f.Kind != source.Shell && f.Kind != source.PowerShell {
+			continue
+		}
+		text := string(f.Data)
+		for _, other := range files {
+			name := filepath.Base(other.Path)
+			if other.Path == f.Path || (other.Kind != source.Shell && other.Kind != source.PowerShell) {
+				continue
+			}
+			for _, l := range strings.Split(text, "\n") {
+				if strings.Contains(l, name) && afterWords.MatchString(l) {
+					if g.After == nil {
+						g.After = map[string][]string{}
+					}
+					g.After[f.Path] = append(g.After[f.Path], name)
+					break
+				}
+			}
+		}
+	}
 }
 
 type line struct {
@@ -113,6 +142,7 @@ func (s *scan) run() {
 		s.azPowerShell()
 	}
 	s.awsCLI()
+	s.steps()
 	s.packagesUsed()
 	s.secrets()
 	s.weakening()
@@ -865,6 +895,7 @@ func (s *scan) awsCLI() {
 	}
 
 	ids := map[string]string{} // variable -> node id
+	vars := stringVars(lines)
 	node := func(ref string) (string, bool) {
 		if v := varRef.FindStringSubmatch(ref); v != nil {
 			id, ok := ids[v[1]]
@@ -877,7 +908,7 @@ func (s *scan) awsCLI() {
 		if m == nil {
 			continue
 		}
-		args := m[1]
+		args := expandVars(m[1], vars)
 
 		if kind, friendly, ok := awsWhat(args); ok {
 			c := struct{ kind, friendly string }{kind, friendly}

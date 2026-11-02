@@ -1,6 +1,7 @@
 package arm
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
@@ -302,6 +303,15 @@ func (r *reader) roleAssignment(it *item, me string) {
 	}
 	r.grant(principals[0], scopes[0], strings.Join(words, ", "), short)
 	r.converted[me] = true
+	if n := r.g.Node(me); n != nil {
+		name := func(id string) string {
+			if x := r.g.Node(id); x != nil {
+				return x.Name
+			}
+			return id
+		}
+		n.Note = fmt.Sprintf("gives %s: %s, on %s", name(principals[0]), strings.Join(words, ", "), name(scopes[0]))
+	}
 }
 
 // grant draws a role as a line of its own, or, when the two already talk,

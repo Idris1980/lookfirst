@@ -181,6 +181,9 @@ type page struct {
 	// Combined is every folder in one picture, scripts joined to the
 	// templates they deploy, shown at the top when there are several.
 	Combined *project
+	// Chains are what happens, step by step, when the code is run.
+	Chains   []chainView
+	ChainCSS template.CSS
 }
 
 // HTML writes the report. With several sections, the riskiest project
@@ -193,6 +196,9 @@ func HTML(w io.Writer, sections []Section, opt Options) error {
 		p.Projects = append(p.Projects, buildProject(s, opt))
 	}
 	p.Sources = all.Sources
+	all.Sort()
+	p.Chains = chainViews(all, opt)
+	p.ChainCSS = chainCSS(p.Chains)
 	for _, f := range all.Findings {
 		p.Counts[f.Severity.String()]++
 	}
@@ -326,8 +332,11 @@ func highlight(p *project) {
 		for _, j := range joined[i] {
 			cls = append(cls, fmt.Sprintf("c%d", j))
 		}
+		if p.Nodes[i].id != "" {
+			cls = append(cls, boxKey(p.Nodes[i].id))
+		}
 		p.Nodes[i].HL = strings.Join(cls, " ")
-		fmt.Fprintf(&css, "svg:has(.n%d:hover) .hl:not(.c%d){opacity:.12}", i, i)
+		fmt.Fprintf(&css, "svg:has(.n%d:hover) .hl:not(.c%d){opacity:.1}", i, i)
 	}
 	p.HoverCSS = template.CSS(css.String())
 }
