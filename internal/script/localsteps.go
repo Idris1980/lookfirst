@@ -15,6 +15,7 @@ import (
 // part of the chain as much as what is built in a cloud.
 
 var (
+	localAsk        = regexp.MustCompile(`(?i)\bRead-Host\s+(?:-Prompt\s+)?("[^"]*"|'[^']*')|\bread\s+(?:-\S+\s+)*-p\s+("[^"]*"|'[^']*')`)
 	localPkgInstall = regexp.MustCompile(`(?i)\b(apt-get|apt|yum|dnf|zypper|apk|brew|choco|winget|scoop|snap|pacman)\s+(?:-\S+\s+)*(install|add|-S)\s+(.*)`)
 	localUpgrade    = regexp.MustCompile(`(?i)\b(apt-get|apt|yum|dnf)\s+(?:-\S+\s+)*(upgrade|dist-upgrade|full-upgrade)\b`)
 	localNpmGlobal  = regexp.MustCompile(`\bnpm\s+(?:install|i)\s+(?:-g|--global)\s+(.*)`)
@@ -57,6 +58,12 @@ func localStep(code, here string, resolve func(string) string) (model.Step, bool
 		return strings.Join(out, ", ")
 	}
 	switch {
+	case localAsk.MatchString(code):
+		m := localAsk.FindStringSubmatch(code)
+		st.Says = "Asks you: " + clean(firstNonEmpty(m[1], m[2]))
+	case compressArchive.MatchString(code):
+		m := compressArchive.FindStringSubmatch(code)
+		st.Says = "Packs " + strings.TrimSuffix(resolve(clean(m[1])), "/*") + " into the zip file " + path.Base(resolve(clean(m[2])))
 	case localPipe.MatchString(code):
 		m := localPipe.FindStringSubmatch(code)
 		st.Says = "Downloads " + clean(m[2]) + " and runs it straight away, without saving or checking it"
@@ -142,7 +149,7 @@ func localStep(code, here string, resolve func(string) string) (model.Step, bool
 		if target == "" || strings.HasPrefix(target, "-") {
 			return st, false
 		}
-		st.Says = "Deletes " + target
+		st.Says = "Deletes " + path.Base(resolve(target))
 		st.Deletes = strings.Contains(m[1], "r") || strings.Contains(code, "-Recurse")
 	default:
 		return st, false

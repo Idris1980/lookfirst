@@ -22,7 +22,7 @@ func Summary(g *model.Graph) []string {
 	var hosts, files, programs, packages, templates []string
 	for _, n := range g.Nodes {
 		switch {
-		case n.ID == model.InternetID, strings.HasPrefix(n.ID, "script."):
+		case n.ID == model.InternetID, strings.HasPrefix(n.ID, "script."), n.Type == "principal", n.Type == "resource group":
 		case strings.HasPrefix(n.ID, "deploy."):
 			templates = append(templates, n.Name)
 		case strings.HasPrefix(n.ID, "host."):

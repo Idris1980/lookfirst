@@ -388,7 +388,7 @@ func inventory(g *model.Graph, opt Options) ([]itemGroup, int) {
 	for _, c := range g.Columns() {
 		var items []item
 		for _, n := range g.Nodes {
-			if n.Category != c || n.ID == model.InternetID {
+			if n.Category != c || n.ID == model.InternetID || n.Type == "principal" || n.Type == "resource group" {
 				continue
 			}
 			it := item{Name: n.Name, What: n.Friendly, Type: n.Type, Href: reveal(opt, n.File, n.Line)}

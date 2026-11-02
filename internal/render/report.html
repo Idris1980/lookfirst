@@ -297,7 +297,7 @@ details.inventory > summary h2 { display: inline; }
           {{if .From}}<div class="note-line">Takes <code>{{.From}}</code> from your computer.</div>{{end}}
           {{if .Where}}<div class="where">{{if .Href}}<a href="{{.Href}}">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if .Code}} · <code>{{.Code}}</code>{{end}}</div>{{end}}
           {{range .Risks}}<div class="steprisk {{.Sev}}"><span class="sev">{{.Sev}}</span> {{if .Href}}<a href="{{.Href}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</div>{{end}}
-          {{if .Sub}}<details class="sub"{{if lt .Count 25}} open{{end}}><summary>{{len .Sub}} steps inside</summary>{{template "steps" .Sub}}</details>{{end}}
+          {{if .Sub}}<details class="sub" open><summary>{{len .Sub}} steps inside</summary>{{template "steps" .Sub}}</details>{{end}}
         </div>
       </li>{{end}}
     </ol>{{end}}

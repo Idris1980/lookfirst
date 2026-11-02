@@ -102,8 +102,19 @@ func (s *scan) steps() {
 		})
 	}
 
-	for _, l := range lines {
-		code := l.code
+	add := func(st model.Step, call *funcCall) {
+		if call != nil {
+			// The link goes to where the function is called, where the
+			// values come from; what it says names the function.
+			st.Line = call.line
+			st.Says += " (in " + call.name + ")"
+		}
+		s.g.Steps = append(s.g.Steps, st)
+	}
+	funcs, inFunc := scriptFunctions(lines, s.f.Kind)
+	zipped := map[string]string{} // a zip file -> the folder packed into it
+	var handle func(l line, code string, call *funcCall)
+	handle = func(l line, code string, call *funcCall) {
 		code = inlineJoin.ReplaceAllStringFunc(code, func(m string) string {
 			var parts []string
 			for _, q := range quotedPart.FindAllStringSubmatch(m, -1) {
@@ -116,11 +127,11 @@ func (s *scan) steps() {
 		})
 		if m := pushDir.FindStringSubmatch(code); m != nil {
 			dir = append(dir, resolve(expandVars(m[2], vars)))
-			continue
+			return
 		}
 		if popDir.MatchString(code) && len(dir) > 1 {
 			dir = dir[:len(dir)-1]
-			continue
+			return
 		}
 		st := model.Step{File: s.f.Path, Line: l.n, Code: shorten(code)}
 
@@ -128,18 +139,21 @@ func (s *scan) steps() {
 		if m := runScript.FindStringSubmatch(code); m != nil && !stepCLI.MatchString(code) {
 			st.Runs = resolve(expandVars(m[1], vars))
 			st.Says = "Runs the script " + st.Runs
-			s.g.Steps = append(s.g.Steps, st)
-			continue
+			add(st, call)
+			return
 		}
 
 		if s.printedOnly(code) {
-			continue // only shown to the user, as in echo "run: curl …"
+			return // only shown to the user, as in echo "run: curl …"
 		}
 		// What it does on the machine itself, and containers it starts.
 		if local, ok := localStep(expandVars(code, vars), dir[len(dir)-1], resolve); ok && (!stepCLI.MatchString(code) || localCompose.MatchString(code) || localRun.MatchString(code)) {
 			local.File, local.Line, local.Code = st.File, st.Line, st.Code
-			s.g.Steps = append(s.g.Steps, local)
-			continue
+			if m := compressArchive.FindStringSubmatch(code); m != nil {
+				zipped[strings.ToLower(resolve(expandVars(m[2], vars)))] = strings.TrimSuffix(resolve(expandVars(m[1], vars)), "/*")
+			}
+			add(local, call)
+			return
 		}
 
 		var tool, args string
@@ -148,10 +162,10 @@ func (s *scan) steps() {
 		} else if m := psStep.FindStringSubmatch(code); m != nil {
 			tool, args = "ps", m[1]+expandVars(m[3], vars)
 		} else {
-			continue
+			return
 		}
 		if tool == "docker" && strings.HasPrefix(args, "compose") {
-			continue // only docker compose up changes something, above
+			return // only docker compose up changes something, above
 		}
 
 		// A variable that keeps a deployment's outputs: $out = az
@@ -166,7 +180,7 @@ func (s *scan) steps() {
 			}
 		}
 		if readOnly(tool, args) {
-			continue
+			return
 		}
 		// What the command names by a deployment output, such as
 		// $out.funcName.value.
@@ -184,7 +198,32 @@ func (s *scan) steps() {
 		here := dir[len(dir)-1]
 		s.describe(&st, tool, nameVars(args), here, resolve, createdAt[l.n])
 		st.Says = strings.ReplaceAll(st.Says, " ", " ")
-		s.g.Steps = append(s.g.Steps, st)
+		if folder, ok := zipped[strings.ToLower(st.From)]; ok {
+			st.Says = strings.Replace(st.Says, "Uploads "+st.From, "Uploads the code in "+folder+"/ (packed into a zip file)", 1)
+			st.From = folder
+		}
+		add(st, call)
+	}
+
+	for _, l := range lines {
+		if inFunc[l.n] {
+			continue // run where it is called, below
+		}
+		code := l.code
+		if name, args, ok := callOf(code, funcs); ok {
+			fn := funcs[strings.ToLower(name)]
+			call := &funcCall{name: fn.name, line: l.n, values: map[string]string{}}
+			for i, p := range fn.params {
+				if i < len(args) {
+					call.values[strings.ToLower(p)] = args[i]
+				}
+			}
+			for _, bl := range fn.body {
+				handle(bl, call.substitute(bl.code), call)
+			}
+			continue
+		}
+		handle(l, code, nil)
 	}
 }
 
@@ -199,7 +238,7 @@ func readOnly(tool, args string) bool {
 	first := strings.ToLower(words[0])
 	looks := func(w string) bool {
 		switch w {
-		case "show", "list", "wait", "login", "logout", "version", "ls", "validate", "validate-template", "what-if", "help", "get", "describe", "logs", "status", "plan", "fmt", "output", "init", "tag", "get-credentials", "get-login-password", "check-name", "exists":
+		case "show", "list", "wait", "login", "logout", "version", "ls", "validate", "validate-template", "what-if", "help", "get", "describe", "logs", "status", "plan", "fmt", "output", "init", "get-credentials", "get-login-password", "check-name", "exists":
 			return true
 		}
 		return strings.HasPrefix(w, "list-") || strings.HasPrefix(w, "show-") || strings.HasPrefix(w, "get-") || strings.HasPrefix(w, "describe-")
@@ -492,6 +531,8 @@ func (s *scan) describe(st *model.Step, tool, args, here string, resolve func(st
 		st.From = path.Join(here, resolve(firstNonEmpty(flag("--file", "-f"), flag("--source", "-s"))))
 		st.Says = fmt.Sprintf("Uploads %s to the container %s in the storage account %s", st.From, flag("--container-name", "-c", "--destination", "-d"), flag("--account-name"))
 		target(flag("--account-name"))
+	case tool == "az" && strings.HasPrefix(args, "resource tag"):
+		st.Says = "Adds the tags " + strings.Join(azFlagList(args, "--tags"), " ") + " to " + firstNonEmpty(flag("--ids"), name, "the resources")
 	case tool == "az" && strings.HasPrefix(args, "vm identity assign"):
 		st.Says = "Gives the VM " + name + " a managed identity, so it can sign in to other Azure services without a password"
 		target(name)
@@ -751,4 +792,112 @@ func article(word string) string {
 		return "an"
 	}
 	return "a"
+}
+
+// A function the script defines, and what it is called with.
+type scriptFunc struct {
+	name   string
+	params []string
+	body   []line
+}
+
+type funcCall struct {
+	name   string
+	line   int
+	values map[string]string // parameter -> the value it is called with
+}
+
+var (
+	psFuncDef       = regexp.MustCompile(`(?i)^\s*function\s+([\w-]+)\s*(?:\(([^)]*)\))?\s*\{?\s*$`)
+	shFuncDef       = regexp.MustCompile(`^\s*(?:function\s+)?([\w-]+)\s*\(\)\s*\{?\s*$|^\s*function\s+([\w-]+)\s*\{?\s*$`)
+	psParamLine     = regexp.MustCompile(`(?i)^\s*param\s*\(([^)]*)\)`)
+	paramName       = regexp.MustCompile(`\$(\w+)`)
+	callArg         = regexp.MustCompile(`"[^"]*"|'[^']*'|\S+`)
+	compressArchive = regexp.MustCompile(`(?i)\bCompress-Archive\b.*?-Path\s+("[^"]*"|\S+).*?-DestinationPath\s+("[^"]*"|\S+)`)
+)
+
+// scriptFunctions finds the functions a script defines, with their
+// parameters and the lines inside them.
+func scriptFunctions(lines []line, kind source.Kind) (map[string]*scriptFunc, map[int]bool) {
+	funcs := map[string]*scriptFunc{}
+	inFunc := map[int]bool{}
+	for i := 0; i < len(lines); i++ {
+		code := lines[i].code
+		var fn *scriptFunc
+		if kind == source.PowerShell {
+			if m := psFuncDef.FindStringSubmatch(code); m != nil {
+				fn = &scriptFunc{name: m[1]}
+				for _, p := range paramName.FindAllStringSubmatch(m[2], -1) {
+					fn.params = append(fn.params, p[1])
+				}
+			}
+		} else if m := shFuncDef.FindStringSubmatch(code); m != nil {
+			fn = &scriptFunc{name: m[1] + m[2]}
+			for k := 1; k <= 9; k++ {
+				fn.params = append(fn.params, fmt.Sprint(k))
+			}
+		}
+		if fn == nil {
+			continue
+		}
+		depth := strings.Count(code, "{") - strings.Count(code, "}")
+		inFunc[lines[i].n] = true
+		j := i + 1
+		if depth == 0 && j < len(lines) && strings.TrimSpace(lines[j].code) == "{" {
+			depth = 1
+			inFunc[lines[j].n] = true
+			j++
+		}
+		for ; j < len(lines) && depth > 0; j++ {
+			c := lines[j].code
+			depth += strings.Count(c, "{") - strings.Count(c, "}")
+			inFunc[lines[j].n] = true
+			if m := psParamLine.FindStringSubmatch(c); m != nil && len(fn.params) == 0 {
+				for _, p := range paramName.FindAllStringSubmatch(m[1], -1) {
+					fn.params = append(fn.params, p[1])
+				}
+				continue
+			}
+			if depth > 0 || strings.TrimSpace(c) != "}" {
+				fn.body = append(fn.body, lines[j])
+			}
+		}
+		funcs[strings.ToLower(fn.name)] = fn
+		i = j - 1
+	}
+	return funcs, inFunc
+}
+
+// callOf reports whether a line calls one of the script's functions, and
+// with which values.
+func callOf(code string, funcs map[string]*scriptFunc) (string, []string, bool) {
+	words := callArg.FindAllString(strings.TrimSpace(code), -1)
+	if len(words) == 0 {
+		return "", nil, false
+	}
+	name := strings.TrimPrefix(words[0], "&")
+	if _, ok := funcs[strings.ToLower(name)]; !ok {
+		return "", nil, false
+	}
+	var args []string
+	for _, w := range words[1:] {
+		if strings.ContainsAny(w, "|;") {
+			break
+		}
+		if strings.HasPrefix(w, "-") && len(w) > 1 && !strings.ContainsAny(w[1:2], "0123456789") {
+			continue // a named argument's name; its value is taken in order
+		}
+		args = append(args, strings.Trim(w, `"'`))
+	}
+	return name, args, true
+}
+
+// substitute puts the values a function is called with into a line of it.
+func (c *funcCall) substitute(code string) string {
+	return useVar.ReplaceAllStringFunc(code, func(m string) string {
+		if v, ok := c.values[strings.ToLower(strings.Trim(m, "${}"))]; ok {
+			return v
+		}
+		return m
+	})
 }

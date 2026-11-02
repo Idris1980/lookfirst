@@ -195,3 +195,29 @@ resource "aws_vpc" "main" {
 	}
 	expect(t, flat(chains[0].Items), "1 Creates the VPC main", "2 Creates the subnet a", "3 Creates the EC2 instance web")
 }
+
+// A function in the script runs where it is called, with the values it
+// is called with, as in Publish $out.appName.value "$PSScriptRoot\app".
+func TestScriptFunctions(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{
+		"deploy.ps1": `function Publish-App($appName, $folder) {
+    Push-Location $folder
+    func azure functionapp publish $appName --python
+    Pop-Location
+}
+az group create --name rg-demo --location swedencentral
+Publish-App "func-one" "$PSScriptRoot\one"
+Publish-App "func-two" "$PSScriptRoot\two"
+`,
+	})
+	got := flat(build(t, dir)[0].Items)
+	expect(t, got,
+		"1 Creates the resource group rg-demo",
+		"2 Uploads the code in one/ to the function app func-one (in Publish-App)",
+		"3 Uploads the code in two/ to the function app func-two (in Publish-App)",
+	)
+	if len(got) != 3 {
+		t.Errorf("the function's own lines are not steps where it is defined: %q", got)
+	}
+}
