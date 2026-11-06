@@ -35,6 +35,7 @@ type config struct {
 	providers []resource // typ is "provider", name is e.g. "aws"
 	locals    []resource
 	variables []variable
+	existing  []resource // data sources: read from the cloud, not created
 	problems  []model.Finding
 	// policyDocs are data "aws_iam_policy_document" blocks by name, so a
 	// policy = data.aws_iam_policy_document.x.json can be read.
@@ -87,6 +88,8 @@ func (c *config) parse(path string, src []byte) {
 				c.policyDocs = map[string]*hclsyntax.Body{}
 			}
 			c.policyDocs[b.Labels[1]] = b.Body
+		case b.Type == "data" && len(b.Labels) == 2 && !localData[b.Labels[0]]:
+			c.existing = append(c.existing, resource{b.Labels[0], b.Labels[1], b.Body, path, b.DefRange().Start.Line})
 		}
 	}
 }
@@ -95,4 +98,14 @@ func (c *config) problem(file string, line int, title, detail string) {
 	c.problems = append(c.problems, model.Finding{
 		Severity: model.High, Title: title, Detail: strings.TrimSpace(detail), File: file, Line: line,
 	})
+}
+
+// localData are data sources that read nothing from a cloud: they work
+// out a value on the machine running Terraform.
+var localData = map[string]bool{
+	"template_file": true, "archive_file": true, "local_file": true, "local_sensitive_file": true,
+	"external": true, "http": true, "null_data_source": true, "cloudinit_config": true,
+	"aws_iam_policy_document": true, "aws_caller_identity": true, "aws_region": true, "aws_partition": true,
+	"aws_availability_zones": true, "azurerm_client_config": true, "azurerm_subscription": true,
+	"terraform_remote_state": true,
 }

@@ -29,6 +29,8 @@ type stepView struct {
 	Sub                                []stepView
 	Count                              int    // steps inside, counted all the way down
 	Keys                               string // classes of the boxes it builds or changes
+	Needs, Uses                        []string
+	Existing                           bool
 }
 
 type riskView struct {
@@ -49,7 +51,8 @@ func stepViews(items []chain.Item, root string, opt Options) []stepView {
 	var out []stepView
 	for _, it := range items {
 		v := stepView{Num: it.Num, Says: it.Says, Note: it.Note, Code: it.Code, From: it.From,
-			Deletes: it.Deletes, Skipped: it.Skipped, Href: reveal(opt, it.File, it.Line)}
+			Deletes: it.Deletes, Skipped: it.Skipped, Href: reveal(opt, it.File, it.Line),
+			Needs: it.Needs, Uses: it.Uses, Existing: it.Existing}
 		if it.File != "" {
 			v.Where = relTo(root, it.File)
 			if it.Line > 0 {
@@ -129,7 +132,7 @@ func Chain(w io.Writer, g *model.Graph) {
 			for _, it := range items {
 				pad := strings.Repeat("   ", depth)
 				num := it.Num
-				if it.Skipped {
+				if it.Skipped || it.Existing {
 					num = "-"
 				}
 				fmt.Fprintf(w, "%s  %-5s %s", pad, num, it.Says)
@@ -140,6 +143,12 @@ func Chain(w io.Writer, g *model.Graph) {
 					fmt.Fprintf(w, "  [%s:%d]", filepath.ToSlash(relTo(root, it.File)), it.Line)
 				}
 				fmt.Fprintln(w)
+				for _, n := range it.Needs {
+					fmt.Fprintf(w, "%s        ? Needs %s, which this code does not create\n", pad, n)
+				}
+				for _, u := range it.Uses {
+					fmt.Fprintf(w, "%s        < Uses %s\n", pad, u)
+				}
 				for _, r := range it.Risks {
 					fmt.Fprintf(w, "%s        ! %s: %s\n", pad, strings.ToUpper(r.Severity.String()), r.Title)
 				}

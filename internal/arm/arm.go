@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Idris1980/lookfirst/internal/knowledge"
 	"github.com/Idris1980/lookfirst/internal/model"
 	"github.com/Idris1980/lookfirst/internal/risk"
 	"github.com/Idris1980/lookfirst/internal/source"
@@ -174,6 +175,7 @@ type template struct {
 
 type resource struct {
 	Type       string            `json:"type"`
+	APIVersion string            `json:"apiVersion"`
 	Name       string            `json:"name"`
 	DependsOn  []string          `json:"dependsOn"`
 	Scope      string            `json:"scope"`
@@ -182,6 +184,7 @@ type resource struct {
 	Resources  []json.RawMessage `json:"resources"`
 	Kind       string            `json:"kind"`
 	Condition  any               `json:"condition"`
+	Existing   bool              `json:"existing"`
 }
 
 type item struct {
@@ -291,7 +294,7 @@ func (r *reader) read(bicep bool) {
 		r.g.AddNode(&model.Node{
 			ID: id(it.typ, it.name), Name: name, Kind: e.kind, Friendly: e.friendly, Code: code,
 			Cloud: "azure", Type: it.typ, Category: e.category, File: r.file, Line: it.line, Address: r.addressOf(it),
-			Condition: conditionOf(it.res.Condition),
+			Condition: conditionOf(it.res.Condition), Existing: it.res.Existing,
 		})
 	}
 	for _, it := range r.items {
@@ -551,7 +554,34 @@ func (r *reader) resolveRefDepth(ref string, depth int) string {
 	return ""
 }
 
+// known checks a resource against Microsoft's own list of resource types,
+// refreshed every week: a type Azure does not have is often one an AI
+// assistant made up, and an old API version may lack today's safer
+// defaults.
+func (r *reader) known(it *item) {
+	if it.res.APIVersion == "" || it.res.Existing {
+		return // a subnet written inside its network, or only referred to
+	}
+	me := id(it.typ, it.name)
+	newest, ok := knowledge.AzureType(it.typ)
+	if !ok {
+		r.g.Add(model.Medium, me, "Resource type Azure does not have",
+			fmt.Sprintf("%s is not in Microsoft's list of Azure resource types. It may be misspelt or made up, and the deployment will then fail. Check the type on learn.microsoft.com/azure/templates.", it.typ), r.file, it.line)
+		return
+	}
+	if len(newest) >= 4 && len(it.res.APIVersion) >= 4 && !strings.HasPrefix(it.res.APIVersion, "[") {
+		var have, now int
+		fmt.Sscanf(it.res.APIVersion[:4], "%d", &have)
+		fmt.Sscanf(newest[:4], "%d", &now)
+		if now-have >= 4 {
+			r.g.Add(model.Low, me, "Old API version",
+				fmt.Sprintf("%s uses API version %s; the newest is %s. Older versions can lack settings and safer defaults that newer ones have. Move to a recent version and check what changed.", it.typ, it.res.APIVersion, newest), r.file, it.line)
+		}
+	}
+}
+
 func (r *reader) rules(it *item) {
+	r.known(it)
 	g, me, p, line := r.g, id(it.typ, it.name), it.res.Properties, it.line
 	switch strings.ToLower(it.typ) {
 	case "microsoft.network/networksecuritygroups":

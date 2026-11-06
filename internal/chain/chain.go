@@ -32,6 +32,11 @@ type Item struct {
 	Note    string // such as "only when deployContainer is true"
 	Risks   []model.Finding
 	Sub     []Item
+	// Needs are what it expects to be there and nothing before it in the
+	// code creates; Uses are what an earlier script creates for it.
+	Needs    []string
+	Uses     []string
+	Existing bool // a template part that is only used, not created
 }
 
 // Chain is everything that happens when one thing is run: a script, or a
@@ -44,7 +49,7 @@ type Chain struct {
 
 // Build finds the chains in everything that was read.
 func Build(g *model.Graph) []Chain {
-	b := &builder{g: g, byFile: map[string][]model.Step{}, built: map[string]bool{}, deployed: map[string]bool{}}
+	b := &builder{g: g, byFile: map[string][]model.Step{}, built: map[string]bool{}, deployed: map[string]bool{}, madeBy: map[string]made{}}
 	for _, s := range g.Steps {
 		b.byFile[key(s.File)] = append(b.byFile[key(s.File)], s)
 	}
@@ -86,6 +91,8 @@ func Build(g *model.Graph) []Chain {
 	var out []Chain
 	for _, f := range entries {
 		b.built = map[string]bool{}
+		b.title = "When " + title(f) + " is run"
+		b.told = map[string]bool{}
 		items := b.script(f, "", map[string]bool{})
 		if len(items) > 0 {
 			out = append(out, Chain{Title: "When " + title(f) + " is run", File: f, Items: items})
@@ -97,6 +104,8 @@ func Build(g *model.Graph) []Chain {
 			continue
 		}
 		b.built = map[string]bool{}
+		b.title = "When " + title(f) + " " + deployWord(f, b.g)
+		b.told = map[string]bool{}
 		items := b.template(f, nil, "")
 		if len(items) > 0 {
 			out = append(out, Chain{Title: "When " + title(f) + " " + deployWord(f, b.g), File: f, Items: items})
@@ -110,7 +119,16 @@ type builder struct {
 	byFile   map[string][]model.Step
 	built    map[string]bool // what this chain has built so far
 	deployed map[string]bool // templates some script deploys
+	// madeBy says, by lower-case name, which step of which script makes
+	// something, across the scripts in the order they run.
+	madeBy map[string]made
+	title  string          // the chain being built
+	file   string          // its file, to name it in what other scripts use
+	told   map[string]bool // what this chain has already said it uses
 }
+
+// made is where something is made: the step and the script it is in.
+type made struct{ chain, step, file string }
 
 // rank puts scripts that build first and scripts that tear down last.
 func rank(file string) int {
@@ -150,6 +168,26 @@ func (b *builder) script(file, prefix string, running map[string]bool) []Item {
 			Creates: s.Creates, Changes: s.Changes, Deletes: s.Deletes}
 		for _, id := range s.Creates {
 			b.built[id] = true
+		}
+		// What it needs: there already, made by an earlier script, or
+		// made by nothing in the code at all.
+		for _, need := range s.Needs {
+			kind, name, _ := strings.Cut(need, "|")
+			what := kindWords(kind) + " " + name
+			switch by, ok := b.madeBy[strings.ToLower(name)]; {
+			case !ok:
+				it.Needs = append(it.Needs, what)
+			case by.chain != b.title && !b.told[strings.ToLower(name)]:
+				// Said once per script: the first step that relies on it.
+				b.told[strings.ToLower(name)] = true
+				it.Uses = append(it.Uses, fmt.Sprintf("%s, made in step %s of %s, which must run first", what, by.step, filepath.Base(by.file)))
+			}
+		}
+		for _, m := range s.Made {
+			_, name, _ := strings.Cut(m, "|")
+			if _, ok := b.madeBy[strings.ToLower(name)]; !ok {
+				b.madeBy[strings.ToLower(name)] = made{b.title, it.Num, file}
+			}
 		}
 		if s.From != "" {
 			it.From = s.From
@@ -299,6 +337,15 @@ func (b *builder) template(file string, params map[string]string, prefix string)
 	again := 0
 	for _, n := range nodes {
 		it := Item{Says: says(n), File: n.File, Line: n.Line, Creates: []string{n.ID}}
+		if n.Existing {
+			// Only read or used: it must be there before the code runs.
+			kind, _, _ := strings.Cut(n.Friendly, " · ")
+			it.Says = "Uses the existing " + strings.TrimSuffix(strings.TrimSuffix(kind, " in AWS"), " in Azure") + " " + n.Name
+			it.Note = "this code does not create it, so it must already be there"
+			it.Existing, it.Creates = true, nil
+			items = append(items, it)
+			continue
+		}
 		if c := n.Condition; c != "" {
 			on, known := decide(c, params)
 			switch {
@@ -316,6 +363,9 @@ func (b *builder) template(file string, params map[string]string, prefix string)
 			continue // already there from an earlier step
 		}
 		if !it.Skipped {
+			if _, ok := b.madeBy[strings.ToLower(n.Name)]; !ok {
+				b.madeBy[strings.ToLower(n.Name)] = made{b.title, prefix, n.File}
+			}
 			b.built[n.ID] = true
 			it.Risks = dedupe(b.risksAt(n.File, -1, it.Creates, nil))
 		}
@@ -324,7 +374,7 @@ func (b *builder) template(file string, params map[string]string, prefix string)
 	// Number what is built; what is skipped keeps its place unnumbered.
 	k := 0
 	for i := range items {
-		if !items[i].Skipped {
+		if !items[i].Skipped && !items[i].Existing {
 			k++
 			items[i].Num = num(prefix, k)
 		}
@@ -525,4 +575,31 @@ func dedupe(risks []model.Finding) []model.Finding {
 		}
 	}
 	return out
+}
+
+// kindWords names a kind of thing a command needs.
+func kindWords(kind string) string {
+	switch kind {
+	case "group":
+		return "the resource group"
+	case "network":
+		return "the virtual network"
+	case "subnet":
+		return "the subnet"
+	case "shield":
+		return "the security group"
+	case "plan":
+		return "the App Service plan"
+	case "registry":
+		return "the container registry"
+	case "key":
+		return "the key vault"
+	case "storage":
+		return "the storage account"
+	case "database":
+		return "the database server"
+	case "image":
+		return "the machine image"
+	}
+	return "the " + kind
 }

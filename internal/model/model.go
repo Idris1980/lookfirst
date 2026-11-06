@@ -54,6 +54,10 @@ type Node struct {
 	// the name of the parameter that decides it, such as "deployContainer",
 	// or "!name" when it is built when the parameter is false.
 	Condition string
+	// Existing is set for something the code only uses and does not
+	// create, such as a Terraform data source or a Bicep "existing"
+	// resource: it must be there before the code is run.
+	Existing bool
 	// Note says in words what it does, when its name and kind do not, such
 	// as "gives funcName: may read and write blobs on dataStorageName".
 	Note string
@@ -172,6 +176,11 @@ type Step struct {
 	Output string
 	// Runs is another script it runs, relative to this one.
 	Runs string
+	// Made and Needs are what it creates and what it expects to be there,
+	// as "kind|name" ("network|vnet-a", "group|rg-web"), so the chain can
+	// tell what must exist before the code is run.
+	Made  []string
+	Needs []string
 }
 
 type Graph struct {

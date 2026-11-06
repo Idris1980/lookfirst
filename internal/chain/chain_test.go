@@ -27,7 +27,7 @@ func flat(items []Item) []string {
 	var out []string
 	for _, it := range items {
 		n := it.Num
-		if it.Skipped {
+		if it.Skipped || it.Existing {
 			n = "-"
 		}
 		out = append(out, n+" "+it.Says)
@@ -219,5 +219,41 @@ Publish-App "func-two" "$PSScriptRoot\two"
 	)
 	if len(got) != 3 {
 		t.Errorf("the function's own lines are not steps where it is defined: %q", got)
+	}
+}
+
+// What the code expects to be there and does not create is said at the
+// step that needs it; what an earlier script makes is said once.
+func TestNeedsWhatExists(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{
+		"1-network.sh": "az group create --name rg-a --location swedencentral\naz network vnet create -g rg-a --name vnet-a --address-prefixes 10.0.0.0/16\n",
+		"2-vm.sh":      "az vm create -g rg-a -n web --image Ubuntu2404 --vnet-name vnet-a --subnet snet-missing\n",
+		"main.tf":      "data \"aws_vpc\" \"main\" {\n  id = \"vpc-123\"\n}\nresource \"aws_subnet\" \"a\" {\n  vpc_id     = data.aws_vpc.main.id\n  cidr_block = \"10.0.1.0/24\"\n}\n",
+	})
+	chains := build(t, dir)
+	var vm, tf *Chain
+	for i := range chains {
+		switch {
+		case strings.Contains(chains[i].Title, "2-vm.sh"):
+			vm = &chains[i]
+		case strings.Contains(chains[i].Title, "main.tf"):
+			tf = &chains[i]
+		}
+	}
+	if vm == nil || tf == nil {
+		t.Fatalf("chains: %+v", chains)
+	}
+	step := vm.Items[0]
+	if len(step.Needs) != 1 || !strings.Contains(step.Needs[0], "subnet snet-missing") {
+		t.Errorf("the VM needs the subnet nothing creates: %q", step.Needs)
+	}
+	uses := strings.Join(step.Uses, "|")
+	if !strings.Contains(uses, "resource group rg-a, made in step 1 of 1-network.sh") || !strings.Contains(uses, "virtual network vnet-a, made in step 2 of 1-network.sh") {
+		t.Errorf("uses: %q", step.Uses)
+	}
+	expect(t, flat(tf.Items), "- Uses the existing VPC main", "1 Creates the subnet a")
+	if !tf.Items[0].Existing {
+		t.Error("a data source is used, not created")
 	}
 }

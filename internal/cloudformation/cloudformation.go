@@ -10,6 +10,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/Idris1980/lookfirst/internal/knowledge"
 	"github.com/Idris1980/lookfirst/internal/model"
 	"github.com/Idris1980/lookfirst/internal/relate"
 	"github.com/Idris1980/lookfirst/internal/risk"
@@ -231,6 +232,14 @@ func (r *reader) check(res *resource) {
 	p := res.props
 	at := res.key.Line
 	me := id(res.name)
+	// Amazon's own list of resource types, refreshed every week: a type
+	// AWS does not have is often one an AI assistant made up.
+	if strings.HasPrefix(res.typ, "AWS::") && !strings.HasPrefix(res.typ, "AWS::Serverless::") {
+		if _, ok := knowledge.AWSType(res.typ); !ok {
+			r.g.Add(model.Medium, r.node(res), "Resource type AWS does not have",
+				res.typ+" is not in Amazon's list of CloudFormation resource types. It may be misspelt or made up, and the stack will then fail. Check the type in the AWS CloudFormation resource reference.", r.file, at)
+		}
+	}
 	if !res.drawn {
 		me = ""
 	}

@@ -555,6 +555,27 @@ var exact = map[string]Advice{
 		},
 		Azure: []Ref{ns2, azPrivate},
 	},
+	"Resource type Azure does not have": {
+		Story: "The template asks Azure for a kind of resource that is not in Microsoft's list. The deployment then stops with an error, perhaps halfway, after other parts are already built. Code from an AI assistant sometimes contains types that sound right but do not exist.",
+		Fix: []string{
+			"Look the type up in Microsoft's template reference and use the exact name it gives, including the parent type for child resources.",
+			"If the type is new, check that it is offered in your region and subscription (az provider show).",
+		},
+		Azure: []Ref{doc("Azure template reference: every resource type", "https://learn.microsoft.com/en-us/azure/templates/"), doc("Azure resource providers and types", "https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-providers-and-types")},
+	},
+	"Resource type AWS does not have": {
+		Story: "The template asks AWS for a kind of resource that is not in Amazon's list. CloudFormation then rolls the stack back. Code from an AI assistant sometimes contains types that sound right but do not exist.",
+		Fix:   []string{"Look the type up in Amazon's resource type reference and use the exact name it gives."},
+		AWS:   []Ref{doc("AWS CloudFormation: resource and property type reference", "https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-template-resource-type-ref.html")},
+	},
+	"Old API version": {
+		Story: "Each Azure API version fixes which settings exist and what their defaults are. A version several years old can lack settings that newer ones have, and the template then cannot ask for them, or gets older, less safe defaults.",
+		Fix: []string{
+			"Move the resource to a recent API version, ideally less than two years old as Microsoft's own linter recommends.",
+			"Read what changed between the versions before you deploy, as names and defaults can differ.",
+		},
+		Azure: []Ref{doc("Bicep linter: use recent API versions", "https://learn.microsoft.com/en-us/azure/azure-resource-manager/bicep/linter-rule-use-recent-api-versions"), doc("Azure template reference: every resource type", "https://learn.microsoft.com/en-us/azure/templates/")},
+	},
 	"Deleted secrets can be lost for good": {
 		Story: "Without purge protection, a key vault or a secret can be deleted and purged at once, by mistake or by an attacker. Everything encrypted with a lost key stays unreadable for good.",
 		Fix:   []string{"Turn purge protection on (enablePurgeProtection / purge_protection_enabled). It cannot be turned off again, which is the point."},

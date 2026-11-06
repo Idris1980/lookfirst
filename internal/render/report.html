@@ -101,7 +101,31 @@ li.step .where code { font-size: 11.5px; }
 .steprisk.high .sev { background: var(--high-bg); color: var(--high); }
 .steprisk.medium .sev { background: var(--medium-bg); color: var(--medium); }
 .steprisk.low .sev { background: var(--low-bg); color: var(--low); }
+.stepneed, .stepuse { font-size: 13px; margin-top: 3px; }
+.stepneed .tag, .stepuse .tag { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; }
+.stepneed .tag { background: var(--medium-bg); color: var(--medium); }
+.stepuse .tag { background: var(--accent-bg); color: var(--accent); }
+li.step.existing .says { font-style: italic; }
 details.sub > summary { cursor: pointer; font-size: 13px; color: var(--muted); margin-top: 4px; }
+.reviewcard { display: none; position: fixed; top: 16px; right: 16px; z-index: 20; width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; background: var(--card); color: var(--text); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; padding: 16px 18px; box-shadow: 0 12px 32px rgba(0,0,0,.18); }
+.reviewcard:target { display: block; }
+.reviewcard h3 { margin: 2px 0; font-size: 18px; }
+.reviewcard h4 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.reviewcard ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.reviewcard li { margin: 2px 0; }
+.cardkicker { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+.cardkind { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.cardclose { float: right; font-size: 13px; }
+.cardwarn { background: var(--medium-bg); color: var(--medium); padding: 6px 10px; border-radius: 8px; font-size: 13px; }
+.cardnote, .cardwhere { font-size: 13px; color: var(--muted); margin: 4px 0; }
+.cardcode { font-size: 12px; background: var(--bg); padding: 8px 10px; border-radius: 8px; overflow: auto; white-space: pre; margin: 4px 0; }
+.cardrisk { font-size: 13px; margin: 6px 0; }
+.cardrisk p { margin: 2px 0 0; }
+.cardrisk .sev { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; }
+.cardrisk.high .sev { background: var(--high-bg); color: var(--high); }
+.cardrisk.medium .sev { background: var(--medium-bg); color: var(--medium); }
+.cardrisk.low .sev { background: var(--low-bg); color: var(--low); }
+.cardfix { color: var(--muted); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
 .legend svg { display: inline-block; vertical-align: middle; margin-right: 6px; }
 .arrow.risky { fill: var(--high); }
@@ -284,18 +308,39 @@ details.inventory > summary h2 { display: inline; }
   </div>
   {{end}}
 
-  <p class="disclaimer">{{.Disclaimer}}</p>
+  <p class="disclaimer">{{.Disclaimer}}{{with .Knowledge}} {{.}}{{end}}</p>
+  {{range .Cards}}
+  <aside class="reviewcard" id="{{.ID}}" aria-label="Review card for {{.Name}}">
+    <a class="cardclose" href="#">Close</a>
+    <p class="cardkicker">Review card</p>
+    <h3>{{.Name}}</h3>
+    <p class="cardkind">{{.Kind}}{{if .Type}} · <code>{{.Type}}</code>{{end}}{{with .Reference}} · <a href="{{.}}">the cloud's own reference</a>{{end}}</p>
+    {{if .Existing}}<p class="cardwarn">This code does not create it. It must already be there before the code is run.</p>{{end}}
+    {{if .Condition}}<p class="cardnote">{{.Condition}}</p>{{end}}
+    {{if .Hidden}}<p class="cardnote">{{.Hidden}}</p>{{end}}
+    {{if .Where}}<h4>Evidence</h4>
+    <p class="cardwhere">{{if .Open}}<a href="{{.Open}}">{{.Where}}</a>{{else}}{{.Where}}{{end}}</p>
+    {{if .Evidence}}<pre class="cardcode">{{.Evidence}}</pre>{{end}}{{end}}
+    {{if .Steps}}<h4>In the chain</h4><ul>{{range .Steps}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    {{if .Needs}}<h4>Needs, and the code does not create</h4><ul>{{range .Needs}}<li>{{.}}</li>{{end}}</ul>{{end}}
+    <h4>Risks</h4>
+    {{if .Risks}}{{range .Risks}}<div class="cardrisk {{.Sev}}"><span class="sev">{{.Sev}}</span> {{if .Href}}<a href="{{.Href}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}<p>{{.Detail}}</p>{{if .Fix}}<p class="cardfix">First step: {{.Fix}}</p>{{end}}</div>{{end}}{{else}}<p class="cardnote">None found in what was checked.</p>{{end}}
+    {{if or .Talks .Heard}}<h4>Lines to and from it</h4><ul>{{range .Talks}}<li>It {{.}}</li>{{end}}{{range .Heard}}<li>{{.}}</li>{{end}}</ul>{{end}}
+  </aside>
+  {{end}}
 </main>
 </body>
 </html>
 {{define "steps"}}<ol class="steps">{{range .}}
-      <li class="step {{.Keys}}{{if .Deletes}} deletes{{end}}{{if .Skipped}} skipped{{end}}{{with .Worst}} worst-{{.}}{{end}}">
-        <span class="num">{{if .Skipped}}–{{else}}{{.Num}}{{end}}</span>
+      <li class="step {{.Keys}}{{if .Deletes}} deletes{{end}}{{if .Skipped}} skipped{{end}}{{if .Existing}} existing{{end}}{{with .Worst}} worst-{{.}}{{end}}">
+        <span class="num">{{if or .Skipped .Existing}}–{{else}}{{.Num}}{{end}}</span>
         <div class="body">
           <div class="says">{{.Says}}</div>
           {{if .Note}}<div class="note-line">{{.Note}}</div>{{end}}
           {{if .From}}<div class="note-line">Takes <code>{{.From}}</code> from your computer.</div>{{end}}
           {{if .Where}}<div class="where">{{if .Href}}<a href="{{.Href}}">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if .Code}} · <code>{{.Code}}</code>{{end}}</div>{{end}}
+          {{range .Needs}}<div class="stepneed"><span class="tag">needs</span> {{.}}, which this code does not create. It must be there before you run it.</div>{{end}}
+          {{range .Uses}}<div class="stepuse"><span class="tag">uses</span> {{.}}</div>{{end}}
           {{range .Risks}}<div class="steprisk {{.Sev}}"><span class="sev">{{.Sev}}</span> {{if .Href}}<a href="{{.Href}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</div>{{end}}
           {{if .Sub}}<details class="sub" open><summary>{{len .Sub}} steps inside</summary>{{template "steps" .Sub}}</details>{{end}}
         </div>
@@ -317,7 +362,7 @@ details.inventory > summary h2 { display: inline; }
         {{range .Edges}}<path class="edge hl {{.HL}} {{.Kind}}{{if .Risky}} risky{{end}}" d="{{.D}}" marker-end="{{if .Risky}}url(#ar){{else if eq .Kind "flow"}}url(#af){{else if eq .Kind "access"}}url(#aa){{else}}url(#a){{end}}"/>{{end}}
         {{range .Edges}}{{if .Lines}}{{$e := .}}<text class="edgelabel hl {{.HL}} {{.Kind}} {{.Anchor}}{{if .Risky}} risky{{end}}" x="{{.LX}}" y="{{.LY}}">{{range $i, $l := .Lines}}<tspan x="{{$e.LX}}" dy="{{if $i}}12{{else}}0{{end}}">{{$l}}</tspan>{{end}}</text>{{end}}{{end}}
         {{range .Nodes}}
-        {{if .Href}}<a class="nodelink" href="{{.Href}}">{{end}}
+        {{if .Card}}<a class="nodelink" href="#{{.Card}}">{{else if .Href}}<a class="nodelink" href="{{.Href}}">{{end}}
         <g class="{{.Cat}} hl {{.HL}}">
           <title>{{.Tooltip}}</title>
           <rect class="box{{if .Sev}} {{.Sev}}{{end}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/>
@@ -334,7 +379,7 @@ details.inventory > summary h2 { display: inline; }
           {{range .Notes}}<text class="note" x="{{.X}}" y="{{.Y}}" dy="10">{{.Text}}</text>{{end}}
           {{if .Sev}}<circle class="badge {{.Sev}}" cx="{{.X}}" cy="{{.Y}}" r="9" transform="translate({{.W}} 0)"/><text class="badgetext" x="{{.X}}" y="{{.Y}}" dx="{{.W}}" dy="4">{{.Count}}</text>{{end}}
         </g>
-        {{if .Href}}</a>{{end}}
+        {{if or .Card .Href}}</a>{{end}}
         {{end}}
       </svg>
     </div>

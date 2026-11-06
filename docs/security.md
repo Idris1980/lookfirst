@@ -15,6 +15,8 @@ The program makes no network requests. The exceptions are:
 
 The web page runs the reader in your browser and may only load its own files, so there is nowhere your code could be sent.
 
+What LookFirst knows about every Azure and AWS resource type comes from Microsoft's template schemas and Amazon's CloudFormation resource specification. A scheduled workflow takes the newest lists every week and opens a pull request; they are built into the program, so checking your code still makes no network request.
+
 ## Secrets are masked before anything goes to an AI
 
 Known key formats, values of settings named like passwords (also when the name is on the line before, as in Kubernetes `- name: DB_PASSWORD` / `value: …`), multi-line private keys and long random strings are replaced with `«SECRET_1»` and so on. The real values never leave your computer; they are put back into a suggested fix only there. The tests mask every example file and check that LookFirst finds no secret left in them.
@@ -36,7 +38,7 @@ Files over 2 MB and folders with more than 500 files are not read, and symbolic 
 Every file in a [release](https://github.com/Idris1980/lookfirst/releases) is built by GitHub Actions from this repository and signed with Sigstore. Check one before you install it with the [GitHub CLI](https://cli.github.com/):
 
 ```
-gh attestation verify lookfirst-win32-x64-0.17.0.vsix --repo Idris1980/lookfirst
+gh attestation verify lookfirst-win32-x64-0.18.0.vsix --repo Idris1980/lookfirst
 ```
 
 It should say `Verification succeeded`. Each release also has `SHA256SUMS.txt` and a software bill of materials (`lookfirst.spdx.json`) listing everything the program is built from.

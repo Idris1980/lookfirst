@@ -18,6 +18,7 @@ node --test "vscode/test/*.test.js"
 - `internal/source` – finds files and decides what kind of code each one is
 - `internal/terraform`, `arm`, `cloudformation`, `compose`, `kubernetes`, `script` – one reader per kind of code
 - `internal/risk` – rules shared by all readers: ports, secrets, placeholders, masking
+- `internal/knowledge` – every Azure and AWS resource type, from Microsoft's and Amazon's own lists; `go run ./internal/knowledge/gen` takes the newest (the *Refresh Azure and AWS knowledge* workflow does it every Monday)
 - `internal/chain` – what happens, step by step: scripts, the templates they deploy and what those build, uploads and deletions, each with its risks
 - `internal/relate` – what a line between two cloud resources means (talks to, may use, runs on, created after), shared by the Terraform, CloudFormation and ARM readers
 - `internal/analyze` – runs the readers and groups the results per folder
@@ -28,4 +29,4 @@ node --test "vscode/test/*.test.js"
 
 ## Releases
 
-Pushing a tag such as `v0.17.0` (matching `vscode/package.json`) builds, signs and publishes a release through `.github/workflows/release.yml`.
+Pushing a tag such as `v0.18.0` (matching `vscode/package.json`) builds, signs and publishes a release through `.github/workflows/release.yml`.

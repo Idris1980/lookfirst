@@ -49,6 +49,26 @@ func build(c *config) *model.Graph {
 		})
 	}
 
+	// Data sources are things that must exist before Terraform runs.
+	for _, r := range c.existing {
+		e := lookup(r.typ)
+		name := r.name
+		if n, ok := str(r.body, "name"); ok && n != "" {
+			name = n
+		}
+		cloud := ""
+		switch {
+		case strings.HasPrefix(r.typ, "aws_"):
+			cloud = "aws"
+		case strings.HasPrefix(r.typ, "azurerm_"):
+			cloud = "azure"
+		}
+		g.Nodes = append(g.Nodes, &model.Node{
+			ID: "data." + r.typ + "." + r.name, Name: name, Kind: e.kind, Friendly: e.friendly, Code: "data." + r.typ + "." + r.name,
+			Cloud: cloud, Type: r.typ, Category: e.category, File: r.file, Line: r.line, Existing: true,
+		})
+	}
+
 	// Each line says what it means, from the setting that holds the
 	// reference and what it points at: "in subnet", "runs as", "reads and
 	// writes data in".
@@ -115,7 +135,17 @@ func resourceRef(t hcl.Traversal) (string, bool) {
 	}
 	root := t.RootName()
 	switch root {
-	case "var", "local", "data", "module", "each", "count", "path", "terraform", "self":
+	case "data":
+		// data.aws_vpc.main: an existing thing the code reads.
+		if len(t) >= 3 {
+			typ, ok1 := t[1].(hcl.TraverseAttr)
+			name, ok2 := t[2].(hcl.TraverseAttr)
+			if ok1 && ok2 {
+				return "data." + typ.Name + "." + name.Name, true
+			}
+		}
+		return "", false
+	case "var", "local", "module", "each", "count", "path", "terraform", "self":
 		return "", false
 	}
 	attr, ok := t[1].(hcl.TraverseAttr)

@@ -111,3 +111,27 @@ func TestLinesSayWhatTheyMean(t *testing.T) {
 		t.Errorf("a web app of kind functionapp is a function app: %+v", n)
 	}
 }
+
+// A resource type Azure does not have, as an AI assistant may write, is
+// found from Microsoft's own list.
+func TestUnknownAzureType(t *testing.T) {
+	tmpl := `{"resources": [
+  {"type": "Microsoft.Storage/storageAccounts", "apiVersion": "2025-01-01", "name": "st1", "properties": {"publicNetworkAccess": "Disabled"}},
+  {"type": "Microsoft.Web/superSites", "apiVersion": "2024-01-01", "name": "made-up"},
+  {"type": "Microsoft.Network/privateDnsZones", "apiVersion": "2018-09-01", "name": "privatelink.blob.core.windows.net"}
+]}`
+	g := Read([]source.File{{Path: "main.json", Data: []byte(tmpl), Kind: source.ARM}})
+	titles := map[string]string{}
+	for _, f := range g.Findings {
+		titles[f.NodeID] += f.Title + ";"
+	}
+	if !strings.Contains(titles[id("Microsoft.Web/superSites", "made-up")], "Resource type Azure does not have") {
+		t.Errorf("made-up type not found: %v", titles)
+	}
+	if strings.Contains(titles[id("Microsoft.Storage/storageAccounts", "st1")], "does not have") {
+		t.Errorf("a real type was called unknown: %v", titles)
+	}
+	if !strings.Contains(titles[id("Microsoft.Network/privateDnsZones", "privatelink.blob.core.windows.net")], "Old API version") {
+		t.Errorf("an API version from 2018 should be called old: %v", titles)
+	}
+}

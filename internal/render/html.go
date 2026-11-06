@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/Idris1980/lookfirst/internal/advice"
+	"github.com/Idris1980/lookfirst/internal/chain"
 	"github.com/Idris1980/lookfirst/internal/explain"
 	"github.com/Idris1980/lookfirst/internal/model"
 )
@@ -51,6 +52,7 @@ type svgNode struct {
 	Href           template.URL // where a click goes, or "" outside VS Code
 	Notes          []svgText    // rules under the name, in a network picture
 	HL             string       // classes for lighting up what it is joined to
+	Card           string       // the anchor of its review card, when it has one
 	id             string
 }
 
@@ -184,6 +186,11 @@ type page struct {
 	// Chains are what happens, step by step, when the code is run.
 	Chains   []chainView
 	ChainCSS template.CSS
+	// Cards are the review cards a click on a box opens.
+	Cards []reviewCard
+	// Knowledge says how current LookFirst's lists of Azure and AWS
+	// resource types are.
+	Knowledge string
 }
 
 // HTML writes the report. With several sections, the riskiest project
@@ -199,6 +206,8 @@ func HTML(w io.Writer, sections []Section, opt Options) error {
 	all.Sort()
 	p.Chains = chainViews(all, opt)
 	p.ChainCSS = chainCSS(p.Chains)
+	p.Cards = reviewCards(all, chain.Build(all), opt)
+	p.Knowledge = knowledgeLine()
 	for _, f := range all.Findings {
 		p.Counts[f.Severity.String()]++
 	}
@@ -376,6 +385,10 @@ func boxFor(g *model.Graph, n *model.Node, x, y, h int, opt Options) svgNode {
 	}
 	if sn.Href = reveal(opt, file, line); sn.Href != "" {
 		sn.Tooltip += "\nClick to open in the code"
+	}
+	if hasCard(n.ID) {
+		sn.Card = cardID(n.ID)
+		sn.Tooltip = strings.Replace(sn.Tooltip, "\nClick to open in the code", "", 1) + "\nClick for the evidence, its step in the chain and its risks"
 	}
 	return sn
 }

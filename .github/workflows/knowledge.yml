@@ -1,0 +1,49 @@
+# Keeps what LookFirst knows about Azure and AWS current: every Monday it
+# takes the newest lists of resource types from Microsoft's template
+# schemas and Amazon's CloudFormation resource specification, runs the
+# tests against them, and opens a pull request when anything changed. A
+# person merges it; nothing is released by this workflow.
+
+name: Refresh Azure and AWS knowledge
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # push the branch with the new lists
+      pull-requests: write # open the pull request
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Take the newest lists from Microsoft and Amazon
+        run: go run ./internal/knowledge/gen
+      - name: Test with them
+        run: go test ./...
+      - name: Open a pull request when something changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- internal/knowledge; then
+            echo "Nothing new."
+            exit 0
+          fi
+          branch="knowledge-$(date -u +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add internal/knowledge/azure.json internal/knowledge/aws.json
+          git commit -m "Nya listor över Azure- och AWS-typer $(date -u +%Y-%m-%d)"
+          git push origin "$branch"
+          gh pr create --title "Nya listor över Azure- och AWS-typer" \
+            --body "Hämtade från Microsofts mallscheman och Amazons CloudFormation-specifikation. Testerna gick igenom med de nya listorna." \
+            --base main --head "$branch"

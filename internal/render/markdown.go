@@ -181,6 +181,9 @@ func chainMarkdown(w io.Writer, g *model.Graph) {
 				line += " _(" + md(it.Note) + ")_"
 			}
 			fmt.Fprintf(w, "%s- %s %s\n", strings.Repeat("  ", depth), num, line)
+			for _, n := range it.Needs {
+				fmt.Fprintf(w, "%s  - :grey_question: needs %s, which this code does not create\n", strings.Repeat("  ", depth), md(n))
+			}
 			for _, r := range it.Risks {
 				fmt.Fprintf(w, "%s  - :warning: %s: %s\n", strings.Repeat("  ", depth), strings.ToUpper(r.Severity.String()), md(r.Title))
 			}

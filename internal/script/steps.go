@@ -284,6 +284,19 @@ func (s *scan) describe(st *model.Step, tool, args, here string, resolve func(st
 			st.Changes = append(st.Changes, id)
 		}
 	}
+	defer func() {
+		// What it creates and what it expects to be there, by kind and
+		// name, for the chain to tell what must exist before it runs.
+		for _, n := range created {
+			st.Made = append(st.Made, n.Kind+"|"+n.Name)
+		}
+		if tool == "az" && strings.HasPrefix(args, "group create") {
+			st.Made = append(st.Made, "group|"+name)
+		}
+		if !st.Deletes {
+			st.Needs = append(st.Needs, needsOf(tool, args, flag)...)
+		}
+	}()
 
 	// A template handed to the cloud.
 	for _, d := range deployCmds {
@@ -900,4 +913,52 @@ func (c *funcCall) substitute(code string) string {
 		}
 		return m
 	})
+}
+
+// needFlags are the flags that name something a command expects to be
+// there already, and the kind of thing they name.
+var needFlags = map[string][]struct{ flag, kind string }{
+	"az": {
+		{"--resource-group", "group"}, {"-g", "group"},
+		{"--vnet-name", "network"}, {"--subnet", "subnet"},
+		{"--nsg", "shield"}, {"--network-security-group", "shield"},
+		{"--plan", "plan"}, {"--registry", "registry"},
+		{"--vault-name", "key"}, {"--account-name", "storage"}, {"--storage-account", "storage"},
+		{"--server", "database"}, {"--environment", "environment"},
+	},
+	"aws": {
+		{"--vpc-id", "network"}, {"--subnet-id", "subnet"}, {"--group-id", "shield"},
+		{"--security-group-ids", "shield"}, {"--key-name", "key pair"},
+		{"--iam-instance-profile", "instance profile"}, {"--role", "role"},
+		{"--image-id", "image"},
+	},
+}
+
+// needsOf lists what a command names that it does not create itself.
+func needsOf(tool, args string, flag func(...string) string) []string {
+	var out []string
+	for _, f := range needFlags[tool] {
+		v := strings.Trim(flag(f.flag), `"'`)
+		if v == "" || strings.HasPrefix(v, "«") {
+			continue
+		}
+		// The command's own subject (--name) is not something it needs.
+		if (f.kind == "group" && strings.HasPrefix(args, "group ")) || (f.kind == "network" && strings.HasPrefix(args, "network vnet create")) {
+			continue
+		}
+		if f.kind == "subnet" && strings.HasPrefix(args, "network vnet subnet create") {
+			continue
+		}
+		if f.flag == "--group-id" && !strings.HasPrefix(args, "ec2 ") {
+			continue
+		}
+		if f.flag == "--iam-instance-profile" {
+			v = strings.TrimPrefix(strings.TrimPrefix(v, "Name="), "Arn=")
+		}
+		if f.flag == "--image-id" && !strings.HasPrefix(v, "ami-") {
+			continue
+		}
+		out = append(out, f.kind+"|"+v)
+	}
+	return out
 }
