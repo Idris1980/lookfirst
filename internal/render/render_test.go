@@ -2,8 +2,6 @@ package render
 
 import (
 	"bytes"
-	"encoding/xml"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -39,96 +37,6 @@ func TestHTMLHasNoScripts(t *testing.T) {
 	}
 }
 
-// A name from a malicious file must stay text in the exports too: no Mermaid
-// directives, links or HTML, and valid XML for draw.io.
-func TestExportsAreSafe(t *testing.T) {
-	g := hostile()
-	g.AddNode(&model.Node{ID: "b", Name: "x\"]\n  click a href \"javascript:alert(1)\"\n%%{init: {}}%%", Kind: "vm", Category: model.Data})
-	g.Connect("a", "b", "port 22|<img src=x>", true)
-
-	var m bytes.Buffer
-	if err := Mermaid(&m, []Section{{Name: "evil", Graph: g}}); err != nil {
-		t.Fatal(err)
-	}
-	out := m.String()
-	for _, bad := range []string{"<script", "<img", "\n  click ", "%%{init", `"]` + "\n  click"} {
-		if strings.Contains(out, bad) {
-			t.Errorf("mermaid output contains %q:\n%s", bad, out)
-		}
-	}
-	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(l), "click") {
-			t.Errorf("a name added a line of its own: %q", l)
-		}
-	}
-
-	var d bytes.Buffer
-	if err := DrawIO(&d, []Section{{Name: "evil", Graph: g}}); err != nil {
-		t.Fatal(err)
-	}
-	var doc struct{ XMLName xml.Name }
-	if err := xml.Unmarshal(d.Bytes(), &doc); err != nil {
-		t.Errorf("draw.io output is not valid XML: %v", err)
-	}
-	if strings.Contains(strings.ToLower(d.String()), "<script") || strings.Contains(d.String(), "html=1") {
-		t.Error("draw.io output may show HTML from the code")
-	}
-}
-
-// Exports hold every box, also when the report folds a long column.
-func TestExportsHoldEveryBox(t *testing.T) {
-	g := &model.Graph{}
-	for i := 0; i < 30; i++ {
-		g.AddNode(&model.Node{ID: fmt.Sprintf("s%d", i), Name: fmt.Sprintf("bucket%d", i), Kind: "storage", Category: model.Data})
-	}
-	var d bytes.Buffer
-	if err := DrawIO(&d, []Section{{Graph: g}}); err != nil {
-		t.Fatal(err)
-	}
-	if n := strings.Count(d.String(), `vertex="1"`) - 1; n != 30 { // one column title
-		t.Errorf("draw.io has %d boxes, want 30", n)
-	}
-	var m bytes.Buffer
-	Mermaid(&m, []Section{{Graph: g}})
-	if strings.Contains(m.String(), "more") || strings.Count(m.String(), "bucket") != 30 {
-		t.Error("mermaid folded boxes")
-	}
-}
-
-// Several folders are drawn together on one page, and a script that
-// deploys a template is joined to what the template builds.
-func TestCombinedJoinsDeployments(t *testing.T) {
-	script := &model.Graph{Order: []model.Category{model.Compute, model.CloudCompute, model.CloudData}}
-	script.AddNode(&model.Node{ID: "script.v40/deploy.ps1", Name: "deploy.ps1", Category: model.Compute, File: "v40/deploy.ps1"})
-	script.AddNode(&model.Node{ID: "deploy.azure.templates/main.json", Name: "templates/main.json", Category: model.CloudCompute, File: "v40/deploy.ps1"})
-	tmpl := &model.Graph{}
-	tmpl.AddNode(&model.Node{ID: "app", Name: "app", Cloud: "azure", Category: model.Compute, File: "v40/templates/main.json"})
-	tmpl.AddNode(&model.Node{ID: "plan", Name: "plan", Cloud: "azure", Category: model.Compute, File: "v40/templates/main.json"})
-	tmpl.Connect("app", "plan", "", false)
-
-	all := combined([]Section{{Name: "v40", Graph: script}, {Name: "templates", Graph: tmpl}})
-	joined := map[string]bool{}
-	for _, e := range all.Edges {
-		if e.From == "deploy.azure.templates/main.json" {
-			joined[e.To] = true
-		}
-	}
-	if !joined["app"] || joined["plan"] {
-		t.Errorf("want a line to the template's top level (app) only, got %v", joined)
-	}
-	if n := all.Node("app"); n == nil || n.Category != model.CloudCompute {
-		t.Errorf("the web app should be in the cloud servers column with scripts around: %+v", n)
-	}
-	if tmpl.Node("app").Category != model.Compute {
-		t.Error("combining changed the folder's own picture")
-	}
-	var d bytes.Buffer
-	DrawIO(&d, []Section{{Name: "v40", Graph: script}, {Name: "templates", Graph: tmpl}})
-	if !strings.Contains(d.String(), `name="All folders"`) {
-		t.Error("the draw.io file should start with a page of all folders")
-	}
-}
-
 func TestLinksOnlyForVSCode(t *testing.T) {
 	var plain, vscode bytes.Buffer
 	HTML(&plain, []Section{{Name: "x", Graph: hostile()}}, Options{})
@@ -159,15 +67,6 @@ func TestOverviewOnlyForSeveralProjects(t *testing.T) {
 	}
 	if !strings.Contains(two.String(), "<h2>Overview</h2>") || !strings.Contains(two.String(), `href="#project-2"`) {
 		t.Error("two projects got no overview with links")
-	}
-}
-
-func TestClipCode(t *testing.T) {
-	if got := clipCode("azurerm_linux_virtual_machine.main", 25); !strings.HasSuffix(got, ".main") || len([]rune(got)) != 25 {
-		t.Errorf("clipCode kept the wrong part: %q", got)
-	}
-	if got := clipCode("services.web", 25); got != "services.web" {
-		t.Errorf("clipCode changed a short name: %q", got)
 	}
 }
 
@@ -221,138 +120,28 @@ func TestMarkdownPutsTheChangeFirst(t *testing.T) {
 	}
 }
 
-// A graph that knows what its lines mean is drawn along the flow: the
-// internet first, then what it reaches and what that talks to. Lines that
-// only give the order of creation, and hidden boxes, are left out.
-func TestFlowPicture(t *testing.T) {
-	g := &model.Graph{}
-	g.AddNode(&model.Node{ID: "web", Name: "web", Category: model.Compute})
-	g.AddNode(&model.Node{ID: "db", Name: "db", Category: model.Data})
-	g.AddNode(&model.Node{ID: "plan", Name: "plan", Category: model.Compute})
-	g.AddNode(&model.Node{ID: "role", Name: "role", Category: model.Security, Hidden: true})
-	g.Expose("web", "HTTPS", false)
-	g.ConnectKind("web", "db", "reads and writes data in", model.Flow)
-	g.ConnectKind("web", "plan", "runs on", model.Hosting)
-	g.ConnectKind("db", "plan", "", model.Order)
-	g.ConnectKind("role", "db", "", model.Order)
-
-	l := layout(g)
-	if !l.flow {
-		t.Fatal("want a flow picture")
+// The whole report is made, chain and review cards included, so a mistake
+// in the template is found by the tests and not by a user.
+func TestReportWithChainAndCards(t *testing.T) {
+	g := &model.Graph{Sources: []string{"deploy.sh", "main.json"}}
+	g.AddNode(&model.Node{ID: "app", Name: "app-1", Kind: "webapp", Friendly: "web app", Cloud: "azure", Type: "Microsoft.Web/sites", File: "main.json", Line: 3})
+	g.AddNode(&model.Node{ID: "kv", Name: "kv-1", Kind: "key", Friendly: "key vault", Cloud: "azure", Type: "Microsoft.KeyVault/vaults", File: "main.json", Line: 9, Existing: true})
+	g.ConnectKind("app", "kv", "reads secrets from", model.Flow)
+	g.Add(model.Low, "app", "No HTTPS", "x", "main.json", 3)
+	g.Steps = []model.Step{
+		{File: "deploy.sh", Line: 1, Says: "Creates the resource group rg-1", Made: []string{"group|rg-1"}},
+		{File: "deploy.sh", Line: 2, Says: "Hands the template main.json to Azure to build", Template: "main.json"},
+		{File: "deploy.sh", Line: 3, Says: "Uploads the code", Changes: []string{"app"}, Needs: []string{"plan|plan-x"}},
 	}
-	col := func(id string) int { return l.pos[id].col }
-	if col(model.InternetID) != 0 || col("web") != 1 || col("db") != 2 || col("plan") != 2 {
-		t.Errorf("columns: internet %d, web %d, db %d, plan %d", col(model.InternetID), col("web"), col("db"), col("plan"))
-	}
-	if _, ok := l.pos["role"]; ok {
-		t.Error("a hidden box was drawn")
-	}
-	for _, e := range l.edges {
-		if e.Kind == model.Order {
-			t.Errorf("an order line was drawn: %+v", e)
-		}
-	}
-
-	var m bytes.Buffer
-	Mermaid(&m, []Section{{Graph: g}})
-	if strings.Contains(m.String(), "subgraph") || strings.Contains(m.String(), "role") {
-		t.Errorf("mermaid flow picture:\n%s", m.String())
-	}
-	var d bytes.Buffer
-	DrawIO(&d, []Section{{Graph: g}})
-	if strings.Contains(d.String(), "role") || !strings.Contains(d.String(), "reads and writes data in") {
-		t.Errorf("draw.io flow picture:\n%s", d.String())
-	}
-}
-
-func TestWrapLabel(t *testing.T) {
-	got := wrapLabel("keeps its state in · may use blobs (owner), queues, tables", 24)
-	want := []string{"keeps its state in", "may use blobs (owner),", "queues, tables"}
-	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Errorf("got %q, want %q", got, want)
-	}
-}
-
-// A network is drawn as frames: the VPC around its subnets, the servers in
-// their subnet, the security groups' rules in the boxes, and arrows only
-// for traffic, from the internet through the gateway, from your IP, and
-// from one group of servers to another.
-func TestNetworkPicture(t *testing.T) {
-	g := &model.Graph{}
-	add := func(id, kind, friendly, address string) {
-		g.AddNode(&model.Node{ID: id, Name: id, Kind: kind, Friendly: friendly, Cloud: "aws", Address: address})
-	}
-	add("vpc", "network", "VPC in AWS", "10.0.0.0/16")
-	add("public", "subnet", "subnet in AWS", "10.0.1.0/24")
-	add("private", "subnet", "subnet in AWS", "10.0.2.0/24")
-	add("igw", "globe", "internet gateway in AWS", "")
-	add("web-sg", "shield", "security group in AWS", "")
-	add("bastion-sg", "shield", "security group in AWS", "")
-	add("db-sg", "shield", "security group in AWS", "")
-	add("web", "vm", "EC2 server in AWS", "")
-	add("bastion", "vm", "EC2 server in AWS", "")
-	for _, e := range [][2]string{{"public", "vpc"}, {"private", "vpc"}, {"igw", "vpc"}, {"web-sg", "vpc"}, {"bastion-sg", "vpc"}, {"db-sg", "vpc"},
-		{"web", "public"}, {"web", "web-sg"}, {"bastion", "public"}, {"bastion", "bastion-sg"}} {
-		g.Connect(e[0], e[1], "", false)
-	}
-	g.Expose("web-sg", "port 80, port 443", false)
-	g.ConnectKind(model.You, "bastion-sg", "port 22", model.Flow)
-	g.ConnectKind("bastion-sg", "web-sg", "port 22", model.Flow)
-	g.ConnectKind("web-sg", "db-sg", "port 3306", model.Flow)
-
-	nv, ok := buildNetwork(g)
-	if !ok {
-		t.Fatal("want a network picture")
-	}
-	if nv.parent["public"] != "vpc" || nv.parent["web"] != "public" || nv.parent["bastion"] != "public" {
-		t.Errorf("frames: %v", nv.parent)
-	}
-	for _, sg := range []string{"web-sg", "bastion-sg"} {
-		if _, drawn := nv.byID[sg]; drawn {
-			t.Errorf("%s protects a server and should be written in its box, not drawn", sg)
-		}
-	}
-	if _, drawn := nv.byID["db-sg"]; !drawn {
-		t.Error("a security group that protects nothing yet should be a box of its own")
-	}
-	want := map[[2]string]string{
-		{model.InternetID, "igw"}: "80, 443", {"igw", "web"}: "80, 443",
-		{model.You, "igw"}: "22", {"igw", "bastion"}: "22",
-		{"bastion", "web"}: "22", {"web", "db-sg"}: "3306",
-	}
-	got := map[[2]string]string{}
-	for _, a := range nv.arrows {
-		got[[2]string{a.from, a.to}] = a.label
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("arrow %s -> %s: got %q, want %q (all: %v)", k[0], k[1], got[k], v, got)
-		}
-	}
-	if len(got) != len(want) {
-		t.Errorf("arrows: %v", got)
-	}
-	notes := strings.Join(nv.byID["web"].notes, "|")
-	if !strings.Contains(notes, "80, 443 from anyone") || !strings.Contains(notes, "22 from bastion-sg") {
-		t.Errorf("web's rules: %q", notes)
-	}
-
 	var buf bytes.Buffer
-	if err := HTML(&buf, []Section{{Name: "v44", Graph: g}}, Options{}); err != nil {
+	if err := HTML(&buf, []Section{{Name: "x", Graph: g}}, Options{}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), `class="frame vnet aws"`) || !strings.Contains(buf.String(), "svg:has(.n0:hover)") {
-		t.Error("the report should draw the VPC as a frame and light up on hover")
-	}
-	var m bytes.Buffer
-	Mermaid(&m, []Section{{Graph: g}})
-	if !strings.Contains(m.String(), `subgraph f1["vpc  10.0.0.0/16"]`) {
-		t.Errorf("mermaid:\n%s", m.String())
-	}
-	var d bytes.Buffer
-	DrawIO(&d, []Section{{Graph: g}})
-	var doc struct{ XMLName xml.Name }
-	if err := xml.Unmarshal(d.Bytes(), &doc); err != nil {
-		t.Errorf("draw.io output is not valid XML: %v", err)
+	out := buf.String()
+	for _, want := range []string{"What happens, step by step", "Creates the web app app-1", "Uses the existing key vault kv-1",
+		`id="` + cardID("app") + `"`, `href="#` + cardID("app") + `"`, "plan-x", "Review card"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report lacks %q", want)
+		}
 	}
 }

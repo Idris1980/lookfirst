@@ -3,8 +3,8 @@
 When people work together on GitHub, changes are proposed as *pull requests*. Add LookFirst to a repository, and every pull request is checked automatically:
 
 - problems are marked on the changed lines, where the reviewer reads the code
-- a summary comment is added, and kept up to date when more changes are pushed; each finding links to AWS's or Microsoft's own guidance on how to fix it, and a picture of what the code builds is drawn right in the comment
-- the full report with pictures can be downloaded from the run
+- a summary comment is added, and kept up to date when more changes are pushed; each finding links to AWS's or Microsoft's own guidance on how to fix it, and what the code would do is listed step by step in the comment
+- the full report can be downloaded from the run
 - if you want, a pull request with a serious problem can be stopped
 
 ## Adding it
@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: Idris1980/lookfirst@v0.18.0
+      - uses: Idris1980/lookfirst@v0.19.0
         with:
           path: .          # files or folders, separated by spaces
           fail-on: high    # or medium, low, none

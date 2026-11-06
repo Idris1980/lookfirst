@@ -45,7 +45,6 @@ func Markdown(w io.Writer, sections []Section, changed map[string]bool) {
 			table(w, all, mine, maxCommentRows)
 		}
 		chainMarkdown(w, all)
-		picture(w, sections)
 		c := counts(all.Findings)
 		fmt.Fprintf(w, "<details><summary>Everything that was read: %d high · %d medium · %d low</summary>\n\n", c["high"], c["medium"], c["low"])
 		for _, s := range sections {
@@ -85,31 +84,7 @@ func Markdown(w io.Writer, sections []Section, changed map[string]bool) {
 	if total := len(all.Findings); total > rows {
 		fmt.Fprintf(w, "…and %d more. The full report is attached to the run.\n\n", total-rows)
 	}
-	picture(w, sections)
 	fmt.Fprintf(w, "<sub>%s</sub>\n", md(explain.Disclaimer))
-}
-
-// maxPictureBoxes keeps the Mermaid picture readable and the comment under
-// GitHub's size limit; larger pictures are in the attached report.
-const maxPictureBoxes = 80
-
-// picture adds the diagram as Mermaid, which GitHub draws, folded away so
-// the findings come first.
-func picture(w io.Writer, sections []Section) {
-	boxes := 0
-	for _, s := range sections {
-		boxes += len(s.Graph.Nodes)
-	}
-	if boxes == 0 {
-		return
-	}
-	if boxes > maxPictureBoxes {
-		fmt.Fprintf(w, "<details><summary>Picture</summary>\n\n%d things are too many to draw here; the full picture is in the report attached to the run.\n\n</details>\n\n", boxes)
-		return
-	}
-	fmt.Fprintf(w, "<details><summary>Picture of what this code builds</summary>\n\n```mermaid\n")
-	Mermaid(w, sections)
-	fmt.Fprintf(w, "```\n\n</details>\n\n")
 }
 
 // table writes up to max findings as a Markdown table and returns how many

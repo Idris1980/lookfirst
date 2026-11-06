@@ -52,35 +52,6 @@ h2 { font-size: 16px; margin: 0 0 12px; }
 .chip.high { background: var(--high-bg); color: var(--high); }
 .chip.medium { background: var(--medium-bg); color: var(--medium); }
 .chip.low { background: var(--low-bg); color: var(--low); }
-.diagram { overflow-x: auto; }
-svg { display: block; font-family: inherit; }
-.coltitle { fill: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-.edge { fill: none; stroke: var(--edge); stroke-width: 1.5; }
-.edge.risky { stroke: var(--high); stroke-width: 2.5; stroke-dasharray: 6 4; }
-.edgelabel { font-size: 11px; fill: var(--muted); text-anchor: middle; paint-order: stroke; stroke: var(--card); stroke-width: 4px; }
-.edgelabel.end { text-anchor: end; }
-.edgelabel.start { text-anchor: start; }
-.edgelabel.risky { fill: var(--high); font-weight: 600; }
-.arrow { fill: var(--edge); }
-.edge.flow { stroke: var(--flow); stroke-width: 1.8; }
-.arrow.flow { fill: var(--flow); }
-.edge.access { stroke: var(--access); stroke-width: 1.6; stroke-dasharray: 5 4; }
-.arrow.access { fill: var(--access); }
-.edgelabel.access { fill: var(--access); }
-.edge.hosting { stroke: var(--edge); stroke-width: 1; stroke-dasharray: 2 3; }
-.edge.risky { stroke: var(--high); stroke-width: 2.5; stroke-dasharray: 6 4; } /* over every kind */
-.frame rect { fill: var(--frame-bg); stroke: var(--frame); stroke-width: 1.5; }
-.frame.vnet.aws rect { stroke: #8c4fff; }
-.frame.vnet.azure rect { stroke: #0078d4; }
-.frame.subnet rect { stroke-dasharray: 6 4; }
-.frame.subnet.public rect { stroke: #7aa116; }
-.frame.subnet.private rect { stroke: #00a4a6; }
-.frame.subnet.azure rect { stroke: #50a0e0; }
-.frametitle { font-size: 13px; font-weight: 600; fill: var(--text); }
-.framesub, .frameempty { font-size: 11px; fill: var(--muted); }
-.frameempty { font-style: italic; }
-.note { font-size: 10.5px; fill: var(--text); opacity: .85; white-space: pre; }
-.hl { transition: opacity .15s; }
 .chain h3 { margin: 18px 0 6px; font-size: 15px; }
 .chain .hint { color: var(--muted); margin-top: 0; }
 ol.steps { list-style: none; margin: 0; padding: 0; }
@@ -89,7 +60,6 @@ li.step { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--
 li.step:first-child { border-top: none; }
 li.step .num { min-width: 34px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 li.step .body { flex: 1; min-width: 0; border-radius: 6px; }
-li.step .body:hover { background: var(--accent-bg); }
 li.step .says { font-weight: 500; }
 li.step.deletes .says { color: var(--high); }
 li.step.skipped { opacity: .6; }
@@ -101,6 +71,10 @@ li.step .where code { font-size: 11.5px; }
 .steprisk.high .sev { background: var(--high-bg); color: var(--high); }
 .steprisk.medium .sev { background: var(--medium-bg); color: var(--medium); }
 .steprisk.low .sev { background: var(--low-bg); color: var(--low); }
+.stepboxes { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 3px; font-size: 12.5px; }
+.stepboxes { color: var(--muted); }
+.stepboxes a { padding: 1px 8px; border-radius: 999px; background: var(--accent-bg); text-decoration: none; }
+a.cardlink { font-weight: 600; }
 .stepneed, .stepuse { font-size: 13px; margin-top: 3px; }
 .stepneed .tag, .stepuse .tag { font-size: 11px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 999px; }
 .stepneed .tag { background: var(--medium-bg); color: var(--medium); }
@@ -126,27 +100,9 @@ details.sub > summary { cursor: pointer; font-size: 13px; color: var(--muted); m
 .cardrisk.medium .sev { background: var(--medium-bg); color: var(--medium); }
 .cardrisk.low .sev { background: var(--low-bg); color: var(--low); }
 .cardfix { color: var(--muted); }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
-.legend svg { display: inline-block; vertical-align: middle; margin-right: 6px; }
-.arrow.risky { fill: var(--high); }
-.box { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
-.box.high { stroke: var(--high); stroke-width: 2.5; }
-.box.medium { stroke: var(--medium); stroke-width: 2; }
-.iconbg { opacity: .14; }
-.officialbg { fill: var(--bg); }
-.icon { fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.name { font-size: 13px; font-weight: 600; fill: var(--text); }
-.friendly { font-size: 11px; fill: var(--muted); }
-.code { font-size: 9.5px; fill: var(--muted); font-family: ui-monospace, Consolas, monospace; opacity: .85; }
-a.nodelink { cursor: pointer; }
-a.nodelink:hover .box, a.nodelink:focus .box { stroke: var(--text); stroke-width: 2.5; }
 .where a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .where a:hover { color: var(--text); }
 .where a.ai { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-weight: 600; color: var(--c-security); }
-.badge.high { fill: var(--high); } .badge.medium { fill: var(--medium); } .badge.low { fill: var(--low); }
-.badgetext { fill: #fff; font-size: 11px; font-weight: 700; text-anchor: middle; }
-.internet { color: var(--c-internet); } .network { color: var(--c-network); } .security { color: var(--c-security); }
-.compute { color: var(--c-compute); } .data { color: var(--c-data); } .other { color: var(--c-other); }
 .findings { list-style: none; margin: 0; padding: 0; }
 .findings li { border-left: 4px solid var(--line); padding: 8px 12px; margin-bottom: 10px; background: var(--bg); border-radius: 0 8px 8px 0; }
 .findings li.high { border-color: var(--high); } .findings li.medium { border-color: var(--medium); } .findings li.low { border-color: var(--low); }
@@ -185,7 +141,6 @@ details.inventory > summary h2 { display: inline; }
 <body>
 <main>
   <h1>LookFirst report</h1>
-  {{if .ChainCSS}}<style>{{.ChainCSS}}</style>{{end}}
   {{if .Chains}}
   <section class="card chain">
     <h2>What happens, step by step</h2>
@@ -206,7 +161,6 @@ details.inventory > summary h2 { display: inline; }
       {{with .Counts.medium}}<span class="chip medium">{{.}} medium</span>{{end}}
       {{with .Counts.low}}<span class="chip low">{{.}} low</span>{{end}}
     </div>
-    {{with .Combined}}{{if .Nodes}}{{template "picture" .}}{{end}}{{end}}
     <ul class="overview">
       {{range .Projects}}
       <li>
@@ -238,13 +192,6 @@ details.inventory > summary h2 { display: inline; }
       {{with .Counts.low}}<span class="chip low">{{.}} low</span>{{end}}
     </div>
   </section>
-
-  {{if .Nodes}}
-  <section class="card">
-    <h2>What would be built</h2>
-    {{template "picture" .}}
-  </section>
-  {{end}}
 
   <section class="card">
     <h2>What we found</h2>
@@ -278,7 +225,7 @@ details.inventory > summary h2 { display: inline; }
   <section class="card">
     <details class="inventory"{{if le .Total 40}} open{{end}}>
       <summary><h2>Everything this code creates or touches ({{.Total}})</h2></summary>
-      <p class="hint">The full list, before anything runs. Nothing is left out here, also when the picture folds long columns.</p>
+      <p class="hint">The full list, before anything runs. Click a name for its review card: the evidence, its step in the chain, what it needs and its risks.</p>
       {{range .Inventory}}
       <h3>{{.Title}}</h3>
       <table>
@@ -286,7 +233,7 @@ details.inventory > summary h2 { display: inline; }
         <tbody>
         {{range .Items}}
           <tr>
-            <td class="iname">{{.Name}}</td><td>{{.What}}</td><td class="mono">{{.Type}}</td>
+            <td class="iname">{{if .Card}}<a href="#{{.Card}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td><td>{{.What}}</td><td class="mono">{{.Type}}</td>
             <td class="mono">{{if .Href}}<a href="{{.Href}}">{{.Where}}</a>{{else}}{{.Where}}{{end}}</td>
             <td>{{if .Sev}}<span class="chip {{.Sev}}">{{.Count}} · {{.Sev}}</span>{{else}}<span class="chip none">none found</span>{{end}}</td>
           </tr>
@@ -301,7 +248,7 @@ details.inventory > summary h2 { display: inline; }
   {{if .NotRead}}
   <section class="card notread">
     <h2>Files LookFirst did not read ({{len .NotRead}})</h2>
-    <p class="hint">These files are in the folder but are of a kind LookFirst cannot read yet. They are not in the picture or the findings, so check them yourself before you run anything.</p>
+    <p class="hint">These files are in the folder but are of a kind LookFirst cannot read yet. They are not in the chain or the findings, so check them yourself before you run anything.</p>
     <ul class="mono">{{range .NotRead}}<li>{{.}}</li>{{end}}</ul>
   </section>
   {{end}}
@@ -332,13 +279,14 @@ details.inventory > summary h2 { display: inline; }
 </body>
 </html>
 {{define "steps"}}<ol class="steps">{{range .}}
-      <li class="step {{.Keys}}{{if .Deletes}} deletes{{end}}{{if .Skipped}} skipped{{end}}{{if .Existing}} existing{{end}}{{with .Worst}} worst-{{.}}{{end}}">
+      <li class="step{{if .Deletes}} deletes{{end}}{{if .Skipped}} skipped{{end}}{{if .Existing}} existing{{end}}{{with .Worst}} worst-{{.}}{{end}}">
         <span class="num">{{if or .Skipped .Existing}}–{{else}}{{.Num}}{{end}}</span>
         <div class="body">
           <div class="says">{{.Says}}</div>
+          {{if gt (len .Boxes) 1}}<div class="stepboxes">Review cards: {{range .Boxes}}<a href="#{{.Card}}">{{.Name}}</a>{{end}}</div>{{end}}
           {{if .Note}}<div class="note-line">{{.Note}}</div>{{end}}
           {{if .From}}<div class="note-line">Takes <code>{{.From}}</code> from your computer.</div>{{end}}
-          {{if .Where}}<div class="where">{{if .Href}}<a href="{{.Href}}">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if .Code}} · <code>{{.Code}}</code>{{end}}</div>{{end}}
+          {{if .Where}}<div class="where">{{if .Href}}<a href="{{.Href}}">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if eq (len .Boxes) 1}}{{range .Boxes}} · <a class="cardlink" href="#{{.Card}}">review card</a>{{end}}{{end}}{{if .Code}} · <code>{{.Code}}</code>{{end}}</div>{{end}}
           {{range .Needs}}<div class="stepneed"><span class="tag">needs</span> {{.}}, which this code does not create. It must be there before you run it.</div>{{end}}
           {{range .Uses}}<div class="stepuse"><span class="tag">uses</span> {{.}}</div>{{end}}
           {{range .Risks}}<div class="steprisk {{.Sev}}"><span class="sev">{{.Sev}}</span> {{if .Href}}<a href="{{.Href}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}</div>{{end}}
@@ -346,47 +294,4 @@ details.inventory > summary h2 { display: inline; }
         </div>
       </li>{{end}}
     </ol>{{end}}
-{{define "picture"}}
-    <div class="diagram">
-      <svg width="{{.W}}" height="{{.H}}" viewBox="0 0 {{.W}} {{.H}}" role="img" aria-label="Diagram of what the code would build or touch, and how the parts connect">
-        <defs>
-          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow" d="M0 0L10 5L0 10z"/></marker>
-          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow risky" d="M0 0L10 5L0 10z"/></marker>
-          <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow flow" d="M0 0L10 5L0 10z"/></marker>
-          <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrow access" d="M0 0L10 5L0 10z"/></marker>
-          {{.Symbols}}
-        </defs>
-        {{if .HoverCSS}}<style>{{.HoverCSS}}</style>{{end}}
-        {{range .Cols}}<text class="coltitle" x="{{.X}}" y="28">{{.Title}}</text>{{end}}
-        {{range .Frames}}<g class="frame {{.Class}}"><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="10"/><text class="frametitle" x="{{.X}}" y="{{.Y}}" dx="12" dy="20">{{.Title}}</text>{{if .Sub}}<text class="framesub" x="{{.X}}" y="{{.Y}}" dx="12" dy="35">{{.Sub}}</text>{{end}}{{range .Lines}}<text class="note" x="{{.X}}" y="{{.Y}}" dy="10">{{.Text}}</text>{{end}}{{if .Empty}}<text class="frameempty" x="{{.X}}" y="{{.Y}}" dx="12" dy="{{.H}}" transform="translate(0 -12)">{{.Empty}}</text>{{end}}</g>{{end}}
-        {{range .Edges}}<path class="edge hl {{.HL}} {{.Kind}}{{if .Risky}} risky{{end}}" d="{{.D}}" marker-end="{{if .Risky}}url(#ar){{else if eq .Kind "flow"}}url(#af){{else if eq .Kind "access"}}url(#aa){{else}}url(#a){{end}}"/>{{end}}
-        {{range .Edges}}{{if .Lines}}{{$e := .}}<text class="edgelabel hl {{.HL}} {{.Kind}} {{.Anchor}}{{if .Risky}} risky{{end}}" x="{{.LX}}" y="{{.LY}}">{{range $i, $l := .Lines}}<tspan x="{{$e.LX}}" dy="{{if $i}}12{{else}}0{{end}}">{{$l}}</tspan>{{end}}</text>{{end}}{{end}}
-        {{range .Nodes}}
-        {{if .Card}}<a class="nodelink" href="#{{.Card}}">{{else if .Href}}<a class="nodelink" href="{{.Href}}">{{end}}
-        <g class="{{.Cat}} hl {{.HL}}">
-          <title>{{.Tooltip}}</title>
-          <rect class="box{{if .Sev}} {{.Sev}}{{end}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/>
-          {{if .Official}}
-          <rect class="officialbg" x="{{.X}}" y="{{.Y}}" width="44" height="60" rx="8"/>
-          <svg x="{{.X}}" y="{{.Y}}" width="44" height="60" viewBox="0 0 44 60"><use href="#ic-{{.Official}}" x="7" y="15" width="30" height="30"/></svg>
-          {{else}}
-          <rect class="iconbg" x="{{.X}}" y="{{.Y}}" width="44" height="60" rx="8" fill="currentColor"/>
-          <svg class="icon" x="{{.X}}" y="{{.Y}}" width="44" height="60" viewBox="-10 -12 44 48" stroke="currentColor">{{.Icon}}</svg>
-          {{end}}
-          <text class="name" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}20{{else}}25{{end}}">{{.Name}}</text>
-          <text class="friendly" x="{{.X}}" y="{{.Y}}" dx="53" dy="{{if .Code}}35{{else}}41{{end}}">{{.Friendly}}</text>
-          {{if .Code}}<text class="code" x="{{.X}}" y="{{.Y}}" dx="53" dy="49">{{.Code}}</text>{{end}}
-          {{range .Notes}}<text class="note" x="{{.X}}" y="{{.Y}}" dy="10">{{.Text}}</text>{{end}}
-          {{if .Sev}}<circle class="badge {{.Sev}}" cx="{{.X}}" cy="{{.Y}}" r="9" transform="translate({{.W}} 0)"/><text class="badgetext" x="{{.X}}" y="{{.Y}}" dx="{{.W}}" dy="4">{{.Count}}</text>{{end}}
-        </g>
-        {{if or .Card .Href}}</a>{{end}}
-        {{end}}
-      </svg>
-    </div>
-    {{if .Flow}}<p class="legend">
-      <span><svg width="34" height="10"><path class="edge flow" d="M1 5H31"/></svg>talks to, at run time</span>
-      <span><svg width="34" height="10"><path class="edge access" d="M1 5H31"/></svg>is allowed to use (a role)</span>
-      <span><svg width="34" height="10"><path class="edge hosting" d="M1 5H31"/></svg>runs on, sits in or signs in as</span>
-      <span><svg width="34" height="10"><path class="edge risky" d="M1 5H31"/></svg>risky</span>
-    </p>{{end}}
-{{end}}
+

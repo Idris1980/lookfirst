@@ -2,13 +2,11 @@
 
 **See what code does before you run it.**
 
-Code from an AI assistant, a forum or a tutorial often works, and often does more than you think: it opens your server to the whole internet, writes passwords into files, downloads and runs other scripts, or makes itself start every time you log in. LookFirst reads the code, without running it, and shows you what it would do, as a picture and as a list of risks in plain English.
-
-![A LookFirst report: a picture of what a Python script touches, with its risks listed below](docs/images/report.png)
+Code from an AI assistant, a forum or a tutorial often works, and often does more than you think: it opens your server to the whole internet, writes passwords into files, downloads and runs other scripts, or makes itself start every time you log in. LookFirst reads the code, without running it, and tells you what it would do, step by step, and what could go wrong, before it is too late to undo.
 
 ## Try it now, nothing to install
 
-Open **[idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/)**, paste some code or choose a file, and you get the picture and the list. Everything happens inside your browser: your code is not sent anywhere.
+Open **[idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/)**, paste some code or choose a file, and you get the review. Everything happens inside your browser: your code is not sent anywhere.
 
 ## Install it in VS Code
 
@@ -35,22 +33,19 @@ In VS Code, LookFirst checks your files while you work, and can ask an AI to exp
 - **Open a file.** LookFirst checks it straight away, and again every time you save, and right after you paste a larger piece of code.
 - **Look at the bottom bar.** The shield shows how it went: red with *high* means something serious, yellow with *medium* means something worth a look, *no known risks* means LookFirst found nothing.
 - **Look for squiggly lines.** Every problem is underlined in the code. Hover over it to read what is wrong and how to fix it. All problems are also listed under **Problems** (`Ctrl+Shift+M`).
-- **Follow the chain.** The report starts with *What happens, step by step*: every script in the folder in the order it would be run, each command in it, every template it hands to the cloud with everything that template builds, the code and images it uploads, what it installs and starts on a server, and what it deletes at the end. Each step shows its risks right under it, and parts a template builds only sometimes are marked as built or not built this time. Hold the mouse over a step to light up what it builds in the picture, or over a box to find the steps that build it.
-- **Check what it relies on.** A step that needs something the code does not create, such as a key pair, a subnet or a role made elsewhere, says so, and so does a step that relies on what an earlier script made. Click any box in the picture for its review card: the line of code it comes from, its step in the chain, what it needs, its risks and every line to and from it.
+- **Follow the chain.** The report starts with *What happens, step by step*: every script in the folder in the order it would be run, each command in it, every template it hands to the cloud with everything that template builds, the code and images it uploads, what it installs and starts on a server, and what it deletes at the end. Each step shows its risks right under it, and parts a template builds only sometimes are marked as built or not built this time. Each thing a step creates or changes has a review card one click away.
+- **Check what it relies on.** A step that needs something the code does not create, such as a key pair, a subnet or a role made elsewhere, says so, and so does a step that relies on what an earlier script made. Click *review card* on a step, or a name in the list of everything created: the line of code it comes from, its steps in the chain, what it needs, its risks and what it is connected to.
 - **Up to date with the clouds.** Every resource type is checked against Microsoft's and Amazon's own lists, refreshed every week, so a type an AI assistant made up, or an API version years out of date, is caught before you deploy.
-- **See the picture.** Right-click the file, or a whole folder, and choose **Show in LookFirst**. Click a box in the picture, or a problem in the list, to jump to that line. A folder with several projects gets one picture per project, with the riskiest first. For cloud templates the picture follows the traffic from left to right, and every arrow says what it means: *calls over HTTPS*, *reads and writes data in*, *pulls its image from*, *may pull images* (a role) or *runs on*. A virtual network is drawn as on Microsoft's and Amazon's own diagrams: the network and its subnets as frames, the servers inside, each security group's rules written in the boxes it protects, and arrows only for the traffic that is let in, with its ports. Hold the mouse over a box to light up its arrows and neighbours.
+- **Open the review.** Right-click the file, or a whole folder, and choose **Show in LookFirst**. Click a problem, or a step, to jump to that line in the code. A folder with several projects gets its findings per project, with the riskiest first.
 - **Read why it matters.** Under every problem, *Why it matters and how to fix it* tells you what could actually happen, how to fix it step by step, and links to AWS's or Microsoft's own security guidance for it. In the Problems list, *how to fix* opens the same guidance.
-- **Take the picture with you.** Right-click a file or folder and choose **Export the Picture** to save it for draw.io (diagrams.net), which Lucidchart imports and which can be saved as a Visio file, or as Mermaid, which GitHub, GitLab, Notion and Obsidian draw.
 
 ## Nothing is missed in silence
 
-Before anything runs, the report lists **everything the code creates or touches**, in every folder and subfolder, also when the picture has to fold a long column. Files that LookFirst cannot read yet are listed too, under *Files LookFirst did not read*, so you know exactly what was not checked.
-
-Things in AWS and Azure are drawn with AWS's and Microsoft's official architecture icons, in layers: network, security, servers and data.
+Before anything runs, the report lists **everything the code creates or touches**, in every folder and subfolder. Files that LookFirst cannot read yet are listed too, under *Files LookFirst did not read*, so you know exactly what was not checked.
 
 ## Ask the AI to explain a problem
 
-Next to each problem in the picture, and in the light bulb on each squiggle, there is **Explain and fix with AI**. It is off until you turn it on, and it works like this:
+Next to each problem in the report, and in the light bulb on each squiggle, there is **Explain and fix with AI**. It is off until you turn it on, and it works like this:
 
 1. LookFirst takes the lines around the problem, about 30 lines, not the whole file.
 2. It replaces every password and key in them with a placeholder such as `«SECRET_1»`. The real values stay on your computer.
@@ -113,4 +108,4 @@ LookFirst also works outside VS Code:
 
 ## License
 
-MIT, except the Azure and AWS icons in `internal/render/cloudicons`, which belong to Microsoft and Amazon Web Services and are used under their terms for architecture diagrams; see [the notice](internal/render/cloudicons/NOTICE.md).
+MIT

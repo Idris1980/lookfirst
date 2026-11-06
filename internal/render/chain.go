@@ -27,8 +27,8 @@ type stepView struct {
 	Worst                              string
 	Risks                              []riskView
 	Sub                                []stepView
-	Count                              int    // steps inside, counted all the way down
-	Keys                               string // classes of the boxes it builds or changes
+	Count                              int       // steps inside, counted all the way down
+	Boxes                              []boxLink // what it builds or changes, each a link to its review card
 	Needs, Uses                        []string
 	Existing                           bool
 }
@@ -42,12 +42,15 @@ func chainViews(g *model.Graph, opt Options) []chainView {
 	root := commonRoot(g.Sources)
 	var out []chainView
 	for _, c := range chain.Build(g) {
-		out = append(out, chainView{Title: c.Title, Items: stepViews(c.Items, root, opt)})
+		out = append(out, chainView{Title: c.Title, Items: stepViews(g, c.Items, root, opt)})
 	}
 	return out
 }
 
-func stepViews(items []chain.Item, root string, opt Options) []stepView {
+// boxLink is a thing a step builds or changes, linked to its review card.
+type boxLink struct{ Name, Card string }
+
+func stepViews(g *model.Graph, items []chain.Item, root string, opt Options) []stepView {
 	var out []stepView
 	for _, it := range items {
 		v := stepView{Num: it.Num, Says: it.Says, Note: it.Note, Code: it.Code, From: it.From,
@@ -69,12 +72,12 @@ func stepViews(items []chain.Item, root string, opt Options) []stepView {
 		if worst <= model.Low {
 			v.Worst = worst.String()
 		}
-		var keys []string
 		for _, id := range append(append([]string{}, it.Creates...), it.Changes...) {
-			keys = append(keys, boxKey(id))
+			if n := g.Node(id); n != nil && hasCard(id) {
+				v.Boxes = append(v.Boxes, boxLink{Name: n.Name, Card: cardID(id)})
+			}
 		}
-		v.Keys = strings.Join(keys, " ")
-		v.Sub = stepViews(it.Sub, root, opt)
+		v.Sub = stepViews(g, it.Sub, root, opt)
 		v.Count = len(v.Sub)
 		for _, s := range v.Sub {
 			v.Count += s.Count
@@ -90,32 +93,6 @@ func boxKey(id string) string {
 	h := fnv.New32a()
 	h.Write([]byte(id))
 	return fmt.Sprintf("x%x", h.Sum32())
-}
-
-// chainCSS lights up, when the mouse is over a step, the boxes it builds
-// or changes in the pictures, and when it is over a box, the steps that
-// build or change it. Only CSS (:has), so the report runs no script.
-func chainCSS(chains []chainView) template.CSS {
-	seen := map[string]bool{}
-	var b strings.Builder
-	var walk func(items []stepView)
-	walk = func(items []stepView) {
-		for _, it := range items {
-			for _, k := range strings.Fields(it.Keys) {
-				if seen[k] {
-					continue
-				}
-				seen[k] = true
-				fmt.Fprintf(&b, "body:has(li.%[1]s>.body:hover) g.%[1]s .box{stroke:var(--accent);stroke-width:3.5}", k)
-				fmt.Fprintf(&b, "body:has(g.%[1]s:hover) li.%[1]s>.body{background:var(--accent-bg)}", k)
-			}
-			walk(it.Sub)
-		}
-	}
-	for _, c := range chains {
-		walk(c.Items)
-	}
-	return template.CSS(b.String())
 }
 
 // Chain writes the chain as text, for the terminal.

@@ -66,7 +66,7 @@ runs:
         else
           "$lf" read --format github "${paths[@]}"
         fi
-        # A summary for the run page and the comment, and the full picture to
+        # A summary for the run page and the comment, and the full report to
         # download. In a pull request the summary starts with what it changes.
         focus=()
         if [ -s "$RUNNER_TEMP/changed.txt" ]; then focus=(--changed "$RUNNER_TEMP/changed.txt"); fi

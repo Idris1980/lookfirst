@@ -90,9 +90,6 @@ func TestLinesSayWhatTheyMean(t *testing.T) {
 			t.Errorf("no line %s -> %s (%s)", w.from, w.to, w.label)
 		}
 	}
-	if !g.HasMeaning() {
-		t.Error("the graph should know what its lines mean")
-	}
 
 	// The role assignment is the line above, and the blob container is
 	// named inside its storage account; both stay in the graph.

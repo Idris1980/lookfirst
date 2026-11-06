@@ -2,23 +2,22 @@
 
 Copied some code from an AI assistant or a forum and not sure what it does? LookFirst reads it and shows you, before you run it:
 
-- **A picture** of what it would build or touch: servers, firewalls, databases, containers, websites it talks to, files on your computer, programs it starts and packages it pulls in.
+- **What happens, step by step**: every script and command in the order it runs, every template it hands to the cloud and everything that builds, the code it uploads and what it deletes, with what each step needs that the code does not create.
 - **The risks in plain English**: ports open to the whole internet, passwords written in the code, scripts that download and run more code, files that start automatically, and more.
 - **Where in the code** each risk is, as squiggles and in the Problems panel.
 
 ## How to use it
 
 - Right-click a file or folder and choose **Show in LookFirst**.
-- Click a box in the picture, or a place in the list of findings, to jump straight to that line in the code.
+- Click a step or a finding to jump straight to that line in the code, or *review card* for the evidence and risks of what a step creates.
 - Or just open, save or paste code. LookFirst checks it on its own and warns you if something is serious.
 - Open **Why it matters and how to fix it** under a finding: what could actually happen, the fix step by step, and AWS's or Microsoft's own guidance for it. In the Problems panel, **how to fix** opens the same guidance.
-- Right-click a file or folder and choose **Export the Picture** to save it for draw.io, Lucidchart or Visio (through draw.io), or as Mermaid for GitHub, Notion and Obsidian.
 
-The report also lists everything the code creates, in every subfolder, and the files LookFirst could not read, so nothing is missed in silence. AWS and Azure resources are drawn with the official architecture icons.
+The report also lists everything the code creates, in every subfolder, and the files LookFirst could not read, so nothing is missed in silence. Every Azure and AWS resource type is checked against Microsoft's and Amazon's own lists, refreshed every week.
 
 ## Explain and fix with AI
 
-Not sure what a problem means, or how to fix it? Click **Explain and fix with AI** next to a finding in the picture, or use the light bulb on a squiggle. LookFirst asks the AI model you already use in VS Code, such as GitHub Copilot, and shows:
+Not sure what a problem means, or how to fix it? Click **Explain and fix with AI** next to a finding in the report, or use the light bulb on a squiggle. LookFirst asks the AI model you already use in VS Code, such as GitHub Copilot, and shows:
 
 - an explanation in plain language, in the language VS Code is set to
 - a suggested fix, which you can compare with your code (**Show the change**) and then apply (**Apply**), or ignore
@@ -42,12 +41,12 @@ If you would rather use Claude directly, set `lookFirst.ai.provider` to `anthrop
 
 ## What it reads
 
-Terraform, Bicep and ARM templates, AWS CloudFormation and SAM templates, docker-compose, Kubernetes manifests, Dockerfiles, Python, JavaScript and TypeScript, shell scripts, PowerShell, package.json and requirements.txt. A folder with several projects gets one picture per project, the riskiest first.
+Terraform, Bicep and ARM templates, AWS CloudFormation and SAM templates, docker-compose, Kubernetes manifests, Dockerfiles, Python, JavaScript and TypeScript, shell scripts, PowerShell, package.json and requirements.txt. A folder with several projects gets its findings per project, the riskiest first.
 
 ## Safe by design
 
 - **Your code is never run.** It is only read as text. To catch syntax errors, the language's own parser is asked to read the file (for example `node --check`), and that never runs it either.
-- **Nothing leaves your computer** unless you ask the AI to explain a problem, as described above. The picture is a plain HTML page with no scripts, shown with scripts switched off.
+- **Nothing leaves your computer** unless you ask the AI to explain a problem, as described above. The report is a plain HTML page with no scripts, shown with scripts switched off.
 - **A workspace cannot change how the extension behaves.** The program it runs and the AI settings can only be set in your own user settings, so a downloaded repository cannot turn on the AI or stop it from asking.
 
 LookFirst tells you what it found. It cannot promise that code is safe: code that is written to hide what it does can get past any reader.

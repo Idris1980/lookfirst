@@ -47,7 +47,6 @@ function activate(context) {
     status,
     vscode.commands.registerCommand('lookFirst.show', (uri) => show(context, uri)),
     vscode.commands.registerCommand('lookFirst.reveal', reveal),
-    vscode.commands.registerCommand('lookFirst.exportPicture', (uri) => exportPicture(uri)),
     vscode.commands.registerCommand('lookFirst.check', () => {
       const doc = vscode.window.activeTextEditor && vscode.window.activeTextEditor.document;
       if (doc) checkDocument(doc, { announce: true });
@@ -322,56 +321,6 @@ function notFoundMessage() {
       + `Uninstall it and install lookfirst-${wanted}-….vsix from the releases page instead.`;
   }
   return 'the lookfirst program was not found. Reinstall the extension, or set lookFirst.path.';
-}
-
-// exportPicture saves the picture of a file or folder as Mermaid, or as a
-// draw.io file that diagrams.net, Lucidchart and (through diagrams.net)
-// Visio can open and edit.
-async function exportPicture(uri) {
-  let target;
-  let copy;
-  let base;
-  if (uri && uri.scheme === 'file') {
-    target = uri.fsPath;
-    base = path.basename(target).replace(/\.[^.]+$/, '');
-  } else {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showInformationMessage('LookFirst: open a file, or right-click a file or folder in the explorer.');
-      return;
-    }
-    copy = scratchCopy(editor.document);
-    target = copy;
-    base = path.basename(editor.document.fileName).replace(/\.[^.]+$/, '');
-  }
-  const pick = await vscode.window.showQuickPick([
-    { label: 'draw.io', description: '.drawio', detail: 'Edit in diagrams.net, import into Lucidchart, or save as Visio (.vsdx) from diagrams.net', format: 'drawio', ext: 'drawio' },
-    { label: 'Mermaid', description: '.mmd', detail: 'Drawn by GitHub, GitLab, VS Code, Obsidian and Notion', format: 'mermaid', ext: 'mmd' },
-  ], { title: 'LookFirst: export the picture as' });
-  if (!pick) {
-    if (copy) removeScratch(copy);
-    return;
-  }
-  const folder = vscode.workspace.workspaceFolders ? vscode.workspace.workspaceFolders[0].uri : undefined;
-  const dest = await vscode.window.showSaveDialog({
-    defaultUri: folder ? vscode.Uri.joinPath(folder, `${base}.${pick.ext}`) : undefined,
-    filters: { [pick.label]: [pick.ext] },
-    title: `Save the picture as ${pick.label}`,
-  });
-  if (!dest) {
-    if (copy) removeScratch(copy);
-    return;
-  }
-  try {
-    const text = await runLookFirstText(['read', '--format', pick.format, target]);
-    await vscode.workspace.fs.writeFile(dest, Buffer.from(text, 'utf8'));
-    const open = await vscode.window.showInformationMessage(`LookFirst: the picture was saved as ${path.basename(dest.fsPath)}.`, 'Open folder');
-    if (open) vscode.commands.executeCommand('revealFileInOS', dest);
-  } catch (err) {
-    vscode.window.showErrorMessage('LookFirst: ' + err.message);
-  } finally {
-    if (copy) removeScratch(copy);
-  }
 }
 
 // runLookFirst runs the lookfirst program directly, without a shell, and

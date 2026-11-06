@@ -66,7 +66,7 @@ func read(args []string) error {
 	fs := flag.NewFlagSet("read", flag.ExitOnError)
 	out := fs.String("out", "", "where to write the HTML report (default lookfirst-report.html for text; other formats write one only when given)")
 	open := fs.Bool("open", false, "open the report in the browser")
-	format := fs.String("format", "text", "what to print: text, json, markdown, github (annotations for GitHub Actions), mermaid (a diagram GitHub and many editors draw) or drawio (for diagrams.net, Lucidchart and, through them, Visio)")
+	format := fs.String("format", "text", "what to print: text, json, markdown or github (annotations for GitHub Actions)")
 	failOn := fs.String("fail-on", "none", "exit with code 3 if there is a finding this severe or worse: high, medium, low or none")
 	vscodeLinks := fs.Bool("vscode-links", false, "make boxes and findings in the report open the code in VS Code")
 	changedList := fs.String("changed", "", "a file listing the paths a pull request changes, one per line: markdown shows their findings first, and --fail-on only counts them")
@@ -92,8 +92,6 @@ func read(args []string) error {
 		"json":     func(s []render.Section) error { return render.JSON(os.Stdout, s) },
 		"markdown": func(s []render.Section) error { render.Markdown(os.Stdout, s, changed); return nil },
 		"github":   func(s []render.Section) error { render.GitHub(os.Stdout, s); return nil },
-		"mermaid":  func(s []render.Section) error { return render.Mermaid(os.Stdout, s) },
-		"drawio":   func(s []render.Section) error { return render.DrawIO(os.Stdout, s) },
 	}
 	print, ok := printers[*format]
 	if !ok {

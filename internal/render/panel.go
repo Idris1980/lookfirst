@@ -152,7 +152,14 @@ func reviewCards(g *model.Graph, chains []chain.Chain, opt Options) []reviewCard
 			}
 			switch n.ID {
 			case e.From:
-				c.Talks = append(c.Talks, lineWords(e, g.Node(e.To), true)+" "+name(e.To))
+				// "keeps its state in · may use queues" reads as
+				// "keeps its state in st1 (and may use queues)".
+				words, rights, _ := strings.Cut(lineWords(e, g.Node(e.To), true), " · ")
+				line := words + " " + name(e.To)
+				if rights != "" {
+					line += ", and " + rights
+				}
+				c.Talks = append(c.Talks, line)
 			case e.To:
 				c.Heard = append(c.Heard, strings.ToUpper(name(e.From)[:1])+name(e.From)[1:]+" — "+lineWords(e, g.Node(e.From), false))
 			}

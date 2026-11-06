@@ -93,19 +93,6 @@ type Edge struct {
 	Kind     string // Flow, Access, Hosting, Order, or "" when not known
 }
 
-// HasMeaning reports whether the graph knows what its lines mean (any
-// Flow, Access or Hosting line); then the picture is drawn as a flow.
-func (g *Graph) HasMeaning() bool {
-	for _, e := range g.Edges {
-		// Lines from the internet are flows in every graph; they say
-		// nothing about whether the reader knew the other lines' meaning.
-		if e.From != InternetID && !IsAddress(e.From) && (e.Kind == Flow || e.Kind == Access || e.Kind == Hosting) {
-			return true
-		}
-	}
-	return false
-}
-
 // ConnectKind adds a line of a kind, or gives an existing line between the
 // two a stronger meaning (a flow beats an access line, which beats hosting,
 // which beats order) and adds the label.
