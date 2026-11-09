@@ -33,8 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- internal/knowledge; then
-            echo "Nothing new."
+          # Only the day the lists were taken changed: nothing new to review.
+          if ! git diff -U0 -- internal/knowledge | grep '^[+-] ' | grep -qv '"updated"'; then
+            echo "Nothing new in Microsoft's or Amazon's lists."
             exit 0
           fi
           branch="knowledge-$(date -u +%Y-%m-%d)"
