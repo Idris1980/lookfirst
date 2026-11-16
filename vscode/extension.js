@@ -14,6 +14,9 @@ const SUPPORTED_EXT = new Set([
   '.jsx', '.tsx', '.sh', '.bash', '.zsh', '.ps1', '.psm1',
 ]);
 
+// What LookFirst reads, said plainly, for when there is nothing to read.
+const READS = 'It reads Terraform, Bicep, ARM, CloudFormation, docker-compose, Kubernetes, Dockerfiles, Python, JavaScript, TypeScript, shell and PowerShell scripts, package.json and requirements.txt.';
+
 // For untitled documents we pick a file name from the language.
 const LANGUAGE_FILE = {
   terraform: 'main.tf', bicep: 'main.bicep', json: 'template.json', yaml: 'file.yaml',
@@ -222,6 +225,10 @@ async function show(context, uri) {
       vscode.window.showInformationMessage('LookFirst: open a file, or right-click a file or folder in the explorer.');
       return;
     }
+    if (!supported(editor.document)) {
+      vscode.window.showInformationMessage(`LookFirst: ${path.basename(editor.document.fileName)} is not a kind of file LookFirst reads. ${READS}`);
+      return;
+    }
     copy = scratchCopy(editor.document);
     copyOf = editor.document.uri;
     target = copy;
@@ -242,7 +249,12 @@ async function show(context, uri) {
       openable.set(key(src), copy && key(src) === key(copy) ? copyOf : vscode.Uri.file(path.resolve(src)));
     }
   } catch (err) {
-    vscode.window.showErrorMessage('LookFirst: ' + err.message);
+    // Nothing to read is not an error: the folder simply holds no code LookFirst knows, such as only Markdown or images.
+    if (/found nothing/.test(String(err.message))) {
+      vscode.window.showInformationMessage(`LookFirst: no code to read in ${title}. ${READS}`);
+    } else {
+      vscode.window.showErrorMessage('LookFirst: ' + err.message);
+    }
     return;
   } finally {
     if (copy) removeScratch(copy);
