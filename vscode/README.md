@@ -2,6 +2,7 @@
 
 Copied some code from an AI assistant or a forum and not sure what it does? LookFirst reads it and shows you, before you run it:
 
+- **A picture of what would be built** and how it fits together, for the whole file or folder, with the official AWS and Azure icons.
 - **What happens, step by step**: every script and command in the order it runs, every template it hands to the cloud and everything that builds, the code it uploads and what it deletes, with what each step needs that the code does not create.
 - **The risks in plain English**: ports open to the whole internet, passwords written in the code, scripts that download and run more code, files that start automatically, and more.
 - **Where in the code** each risk is, as squiggles and in the Problems panel.

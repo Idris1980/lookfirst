@@ -2,7 +2,7 @@
 
 **See what code does before you run it.**
 
-Code from an AI assistant, a forum or a tutorial often works, and often does more than you think: it opens your server to the whole internet, writes passwords into files, downloads and runs other scripts, or makes itself start every time you log in. LookFirst reads the code, without running it, and tells you what it would do, step by step, and what could go wrong, before it is too late to undo.
+Code from an AI assistant, a forum or a tutorial often works, and often does more than you think: it opens your server to the whole internet, writes passwords into files, downloads and runs other scripts, or makes itself start every time you log in. LookFirst reads the code, without running it, and shows you what it would build and how it fits together, what happens step by step, and what could go wrong, before it is too late to undo.
 
 ## Try it now, nothing to install
 
@@ -33,7 +33,8 @@ In VS Code, LookFirst checks your files while you work, and can ask an AI to exp
 - **Open a file.** LookFirst checks it straight away, and again every time you save, and right after you paste a larger piece of code.
 - **Look at the bottom bar.** The shield shows how it went: red with *high* means something serious, yellow with *medium* means something worth a look, *no known risks* means LookFirst found nothing.
 - **Look for squiggly lines.** Every problem is underlined in the code. Hover over it to read what is wrong and how to fix it. All problems are also listed under **Problems** (`Ctrl+Shift+M`).
-- **Follow the chain.** The report starts with *What happens, step by step*: every script in the folder in the order it would be run, each command in it, every template it hands to the cloud with everything that template builds, the code and images it uploads, what it installs and starts on a server, and what it deletes at the end. Each step shows its risks right under it, and parts a template builds only sometimes are marked as built or not built this time. Each thing a step creates or changes has a review card one click away.
+- **See the whole picture first.** Everything in the file or folder you chose, in one picture at the top: what would be built and how it fits together. A virtual network is drawn as on Microsoft's and Amazon's own diagrams, the network and its subnets as frames with the servers inside and each security group's rules written in the boxes it protects; otherwise the picture follows the traffic, and every arrow says what it means, such as *calls over HTTPS* or *pulls its image from*. AWS and Azure resources have their official icons. Click a box for its review card.
+- **Follow the chain.** The report starts with *What happens, step by step*: every script in the folder in the order it would be run, each command in it, every template it hands to the cloud with everything that template builds, the code and images it uploads, what it installs and starts on a server, and what it deletes at the end. Each step shows its risks right under it, and parts a template builds only sometimes are marked as built or not built this time. Each thing a step creates or changes has a review card one click away, and holding the mouse over a step lights up what it builds in the picture.
 - **Check what it relies on.** A step that needs something the code does not create, such as a key pair, a subnet or a role made elsewhere, says so, and so does a step that relies on what an earlier script made. Click *review card* on a step, or a name in the list of everything created: the line of code it comes from, its steps in the chain, what it needs, its risks and what it is connected to.
 - **Up to date with the clouds.** Every resource type is checked against Microsoft's and Amazon's own lists, refreshed every week, so a type an AI assistant made up, or an API version years out of date, is caught before you deploy.
 - **Open the review.** Right-click the file, or a whole folder, and choose **Show in LookFirst**. Click a problem, or a step, to jump to that line in the code. A folder with several projects gets its findings per project, with the riskiest first.
@@ -108,4 +109,4 @@ LookFirst also works outside VS Code:
 
 ## License
 
-MIT
+MIT, except the Azure and AWS icons in `internal/render/cloudicons`, which belong to Microsoft and Amazon Web Services and are used under their terms for architecture diagrams; see [the notice](internal/render/cloudicons/NOTICE.md).

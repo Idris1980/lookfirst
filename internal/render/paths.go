@@ -3,8 +3,6 @@ package render
 import (
 	"path/filepath"
 	"strings"
-
-	"github.com/Idris1980/lookfirst/internal/model"
 )
 
 // commonRoot is the deepest folder holding every file that was read.
@@ -39,10 +37,4 @@ func relTo(root, file string) string {
 		return filepath.ToSlash(rel)
 	}
 	return filepath.ToSlash(filepath.Base(file))
-}
-
-// isVNet reports whether a box is a virtual network (Azure) or a VPC (AWS).
-func isVNet(n *model.Node) bool {
-	f := strings.ToLower(n.Friendly)
-	return n.Kind == "network" && (strings.Contains(f, "virtual network") || strings.HasPrefix(f, "vpc"))
 }

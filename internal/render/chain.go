@@ -29,6 +29,7 @@ type stepView struct {
 	Sub                                []stepView
 	Count                              int       // steps inside, counted all the way down
 	Boxes                              []boxLink // what it builds or changes, each a link to its review card
+	Keys                               string    // classes of the boxes it builds or changes, to light them up in the picture
 	Needs, Uses                        []string
 	Existing                           bool
 }
@@ -72,6 +73,11 @@ func stepViews(g *model.Graph, items []chain.Item, root string, opt Options) []s
 		if worst <= model.Low {
 			v.Worst = worst.String()
 		}
+		var keys []string
+		for _, id := range append(append([]string{}, it.Creates...), it.Changes...) {
+			keys = append(keys, boxKey(id))
+		}
+		v.Keys = strings.Join(keys, " ")
 		for _, id := range append(append([]string{}, it.Creates...), it.Changes...) {
 			if n := g.Node(id); n != nil && hasCard(id) {
 				v.Boxes = append(v.Boxes, boxLink{Name: n.Name, Card: cardID(id)})
@@ -93,6 +99,32 @@ func boxKey(id string) string {
 	h := fnv.New32a()
 	h.Write([]byte(id))
 	return fmt.Sprintf("x%x", h.Sum32())
+}
+
+// chainCSS lights up, when the mouse is over a step, the boxes it builds
+// or changes in the pictures, and when it is over a box, the steps that
+// build or change it. Only CSS (:has), so the report runs no script.
+func chainCSS(chains []chainView) template.CSS {
+	seen := map[string]bool{}
+	var b strings.Builder
+	var walk func(items []stepView)
+	walk = func(items []stepView) {
+		for _, it := range items {
+			for _, k := range strings.Fields(it.Keys) {
+				if seen[k] {
+					continue
+				}
+				seen[k] = true
+				fmt.Fprintf(&b, "body:has(li.%[1]s>.body:hover) g.%[1]s .box{stroke:var(--accent);stroke-width:3.5}", k)
+				fmt.Fprintf(&b, "body:has(g.%[1]s:hover) li.%[1]s>.body{background:var(--accent-bg)}", k)
+			}
+			walk(it.Sub)
+		}
+	}
+	for _, c := range chains {
+		walk(c.Items)
+	}
+	return template.CSS(b.String())
 }
 
 // Chain writes the chain as text, for the terminal.
