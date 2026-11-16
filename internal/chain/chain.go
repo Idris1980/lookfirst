@@ -49,9 +49,17 @@ type Chain struct {
 
 // Build finds the chains in everything that was read.
 func Build(g *model.Graph) []Chain {
-	b := &builder{g: g, byFile: map[string][]model.Step{}, built: map[string]bool{}, deployed: map[string]bool{}, madeBy: map[string]made{}}
+	b := &builder{g: g, byFile: map[string][]model.Step{}, built: map[string]bool{}, deployed: map[string]bool{}, madeBy: map[string]made{},
+		stacks: map[string]string{}}
 	for _, s := range g.Steps {
 		b.byFile[key(s.File)] = append(b.byFile[key(s.File)], s)
+	}
+	// Which template each CloudFormation stack is built from, so a step that
+	// deletes the stack can say what that removes.
+	for _, s := range g.Steps {
+		if s.Template != "" && s.Stack != "" && !strings.Contains(s.Stack, "$") {
+			b.stacks[strings.ToLower(s.Stack)] = b.templatePath(join(s.File, s.Template))
+		}
 	}
 	// The scripts no other script runs are where it starts.
 	runBy := map[string]bool{}
@@ -122,9 +130,10 @@ type builder struct {
 	// madeBy says, by lower-case name, which step of which script makes
 	// something, across the scripts in the order they run.
 	madeBy map[string]made
-	title  string          // the chain being built
-	file   string          // its file, to name it in what other scripts use
-	told   map[string]bool // what this chain has already said it uses
+	title  string            // the chain being built
+	file   string            // its file, to name it in what other scripts use
+	told   map[string]bool   // what this chain has already said it uses
+	stacks map[string]string // CloudFormation stack name (lower case) -> the template it is built from
 }
 
 // made is where something is made: the step and the script it is in.
@@ -221,6 +230,15 @@ func (b *builder) script(file, prefix string, running map[string]bool) []Item {
 			it.Sub = b.template(t, b.params(file, t, s.Params), it.Num)
 			if len(it.Sub) == 0 {
 				it.Note = "LookFirst did not find this template among the files it read, so what it builds is not shown."
+			}
+		case s.Deletes && s.Stack != "":
+			if t, ok := b.stacks[strings.ToLower(s.Stack)]; ok {
+				it.Sub = b.removed(t, it.Num)
+				for _, sub := range it.Sub {
+					it.Risks = append(it.Risks, sub.Risks...)
+				}
+			} else {
+				it.Note = "LookFirst did not find which template built this stack, so what deleting it removes is not shown. Check the stack before running this."
 			}
 		}
 		// An output no template named stays as its name.
@@ -320,7 +338,8 @@ func (b *builder) template(file string, params map[string]string, prefix string)
 	var nodes []*model.Node
 	in := map[string]bool{}
 	for _, n := range b.g.Nodes {
-		if inFile(n) && n.Type != "principal" && n.Type != "resource group" {
+		// Places a server talks to when it starts are not something the template builds.
+		if inFile(n) && n.Type != "principal" && n.Type != "resource group" && !strings.HasPrefix(n.ID, "host.") {
 			nodes = append(nodes, n)
 			in[n.ID] = true
 		}
@@ -377,6 +396,24 @@ func (b *builder) template(file string, params map[string]string, prefix string)
 		if !items[i].Skipped && !items[i].Existing {
 			k++
 			items[i].Num = num(prefix, k)
+		}
+	}
+	// What a server does when it starts, from the script written into it (user data).
+	for i := range items {
+		if items[i].Skipped || len(items[i].Creates) != 1 {
+			continue
+		}
+		n := b.g.Node(items[i].Creates[0])
+		if n == nil {
+			continue
+		}
+		for j, s := range n.Startup {
+			says := s.Says
+			if says != "" {
+				says = strings.ToLower(says[:1]) + says[1:]
+			}
+			items[i].Sub = append(items[i].Sub, Item{Num: num(items[i].Num, j+1), Says: "When it starts, " + says,
+				File: s.File, Line: s.Line, Code: s.Code, Risks: dedupe(b.risksAt(s.File, s.Line))})
 		}
 	}
 	if again > 0 {
@@ -481,6 +518,48 @@ func dependencyOrder(nodes []*model.Node, edges []model.Edge, in map[string]bool
 		visit(n)
 	}
 	return out
+}
+
+// removed is what deleting a stack built from a template removes, in the
+// reverse order of building it, and what happens to the data in each part.
+func (b *builder) removed(file string, prefix string) []Item {
+	var nodes []*model.Node
+	in := map[string]bool{}
+	for _, n := range b.g.Nodes {
+		if n.File != "" && key(n.File) == key(file) && n.ID != model.InternetID && !n.Existing && n.Type != "principal" && n.Type != "resource group" &&
+			!strings.HasPrefix(n.ID, "host.") {
+			nodes = append(nodes, n)
+			in[n.ID] = true
+		}
+	}
+	sort.SliceStable(nodes, func(i, j int) bool { return nodes[i].Line < nodes[j].Line })
+	nodes = dependencyOrder(nodes, b.g.Edges, in)
+	var items []Item
+	for i := len(nodes) - 1; i >= 0; i-- {
+		n := nodes[i]
+		kind, _, _ := strings.Cut(n.Friendly, " · ")
+		kind = strings.TrimSuffix(strings.TrimSuffix(kind, " in AWS"), " in Azure")
+		it := Item{Num: num(prefix, len(items)+1), File: n.File, Line: n.Line, Deletes: true, Changes: []string{n.ID}}
+		switch n.OnDelete {
+		case model.Lost:
+			it.Says = "Deletes the " + kind + " " + n.Name + " and all the data in it. No copy is kept, so it cannot be brought back"
+		case model.Snapshot:
+			it.Says = "Deletes the " + kind + " " + n.Name + ". AWS keeps a final snapshot of it to restore from"
+		case model.Kept:
+			it.Says = "Leaves the " + kind + " " + n.Name + " in place, with its data (it is not deleted with the stack)"
+			it.Deletes = false
+		default:
+			it.Says = "Deletes the " + kind + " " + n.Name
+		}
+		// The template's own warnings about losing the data belong here, where it happens.
+		for _, f := range b.g.Findings {
+			if f.NodeID == n.ID && strings.Contains(f.Title, "deleted") {
+				it.Risks = append(it.Risks, f)
+			}
+		}
+		items = append(items, it)
+	}
+	return items
 }
 
 // risksAt are the findings on a line of a script, or on the boxes a step

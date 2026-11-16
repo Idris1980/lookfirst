@@ -11,7 +11,8 @@ func TestSecretName(t *testing.T) {
 		"GITHUB_TOKEN", "connection_string", "administratorLoginPassword", "sas_token", "private_key"}
 	notSecret := []string{"storageAccountConnectionStringName", "password_hint", "key_vault_secret_id",
 		"tokenType", "token_type", "password_min_length", "secret_name", "admin_username", "public_key",
-		"TOKEN_TTL", "POSTGRES_PASSWORD_FILE", "next_token", "password_policy", "location", "sassy"}
+		"TOKEN_TTL", "POSTGRES_PASSWORD_FILE", "next_token", "password_policy", "location", "sassy",
+		"http_tokens", "HttpTokens", "http_put_response_hop_limit"}
 	for _, n := range secret {
 		if !SecretName(n) {
 			t.Errorf("SecretName(%q) = false, want true", n)

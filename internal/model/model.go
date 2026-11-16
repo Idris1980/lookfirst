@@ -64,6 +64,15 @@ type Node struct {
 	// Address is the address range of a network or subnet, e.g.
 	// "10.0.1.0/24", when the code spells it out.
 	Address string
+	// Startup is what it does when it starts, read from a script written
+	// into it, such as a server's user data: installs software, downloads
+	// files, fetches secrets. Shown inside the step that creates it.
+	Startup []Step
+	// OnDelete says what happens to the data in it when what built it is
+	// deleted, such as a CloudFormation stack: Lost (gone, with no copy),
+	// Snapshot (a final copy is kept) or Kept (left in place). Empty for
+	// things that hold no data, or when it is not known.
+	OnDelete string
 	// Hidden boxes are part of something else, such as a role assignment
 	// (drawn as a line with the right it gives) or a blob container (shown
 	// inside its storage account). They are left out of the picture but
@@ -118,6 +127,13 @@ func (g *Graph) ConnectKind(from, to, label, kind string) {
 	g.Edges = append(g.Edges, Edge{From: from, To: to, Label: label, Kind: kind})
 }
 
+// What happens to a box's data when what built it is deleted (Node.OnDelete).
+const (
+	Lost     = "lost"
+	Snapshot = "snapshot"
+	Kept     = "kept"
+)
+
 type Severity int
 
 const (
@@ -151,9 +167,12 @@ type Step struct {
 	Creates []string
 	Changes []string // what it changes, uploads to or starts
 	Deletes bool
-	// From is what it takes from your computer, such as a folder of code
-	// or a Dockerfile's folder, relative to the script.
+	// From is what it takes from the machine the script runs on, such as a
+	// folder of code or a Dockerfile's folder, relative to the script.
 	From string
+	// Stack is the CloudFormation stack a template is deployed as, or the
+	// stack a step deletes, so the chain can say what deleting it removes.
+	Stack string
 	// Template is a template it hands to the cloud to build, relative to
 	// the script, with the parameters given on the command line.
 	Template string

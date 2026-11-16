@@ -30,8 +30,10 @@ var (
 	runScript   = regexp.MustCompile(`(?i)^\s*(?:&|\.|bash|sh|pwsh|powershell(?:\.exe)?|source|sudo\s+bash)?\s*(?:-File\s+)?["']?([^\s"';|&]+\.(?:ps1|sh))["']?(\s|$)`)
 	adLookup    = regexp.MustCompile(`^\s*\$?(\w+)\s*=\s*\$\(\s*az\s+ad\s+(user|group|sp)\s+show\s+(?:--id|--group)\s+(\S+)`)
 	showLookup  = regexp.MustCompile(`^\s*\$?(\w+)\s*=\s*\$\(\s*az\s+((?:[a-z-]+\s+)+?)show\b(.*)`)
-	awsLookup   = regexp.MustCompile(`^\s*\$?(\w+)\s*=\s*\$?\(?\s*aws\s+\S+\s+describe-\S+.*?(?:Values=|--group-names\s+|--names\s+|--bucket\s+)([\w.-]+)`)
-	psStep      = regexp.MustCompile(`(?i)\b((New|Remove|Set|Publish|Update|Add|Start|Stop|Restart|Invoke|Register|Enable|Disable|Grant|Revoke)-Az\w+)\b(.*)`)
+	awsLookup   = regexp.MustCompile(`^\s*\$?(\w+)\s*=\s*\$?\(?\s*aws\s+\S+\s+describe-\S+.*?(?:Values=|--group-names\s+|--names\s+|--bucket\s+)(\$?\{?[\w.-]+\}?)`)
+	// $Lista = $Instanser -split "\s+": the same things as $Instanser.
+	copyVar = regexp.MustCompile(`^\s*\$(\w+)\s*=\s*\$(\w+)\b`)
+	psStep  = regexp.MustCompile(`(?i)\b((New|Remove|Set|Publish|Update|Add|Start|Stop|Restart|Invoke|Register|Enable|Disable|Grant|Revoke)-Az\w+)\b(.*)`)
 )
 
 func (s *scan) steps() {
@@ -76,7 +78,11 @@ func (s *scan) steps() {
 	// $WebId = aws ec2 describe-instances --filters Name=tag:Name,Values=web.
 	for _, l := range lines {
 		if m := awsLookup.FindStringSubmatch(l.code); m != nil {
-			named[strings.ToLower(m[1])] = strings.Trim(m[2], `"'`)
+			named[strings.ToLower(m[1])] = strings.Trim(expandVars(m[2], vars), `"'`)
+		} else if m := copyVar.FindStringSubmatch(l.code); m != nil {
+			if n, ok := named[strings.ToLower(m[2])]; ok {
+				named[strings.ToLower(m[1])] = n
+			}
 		}
 		if m := adLookup.FindStringSubmatch(l.code); m != nil {
 			named[strings.ToLower(m[1])] = "the Entra " + m[2] + " " + strings.Trim(m[3], `"'`)
@@ -205,11 +211,7 @@ func (s *scan) steps() {
 		add(st, call)
 	}
 
-	for _, l := range lines {
-		if inFunc[l.n] {
-			continue // run where it is called, below
-		}
-		code := l.code
+	run := func(l line, code string) {
 		if name, args, ok := callOf(code, funcs); ok {
 			fn := funcs[strings.ToLower(name)]
 			call := &funcCall{name: fn.name, line: l.n, values: map[string]string{}}
@@ -221,9 +223,30 @@ func (s *scan) steps() {
 			for _, bl := range fn.body {
 				handle(bl, call.substitute(bl.code), call)
 			}
-			continue
+			return
 		}
 		handle(l, code, nil)
+	}
+	loops, inLoop := scriptLoops(lines, s.f.Kind)
+	for _, l := range lines {
+		if inFunc[l.n] {
+			continue // run where it is called, below
+		}
+		if lp, ok := loops[l.n]; ok {
+			// Once per value: foreach ($Layer in "webb", "data") deletes two stacks, each with its name.
+			for _, v := range lp.values {
+				round := &funcCall{values: map[string]string{strings.ToLower(lp.variable): v}}
+				for _, bl := range lp.body {
+					// $Stack = "$Prefix-$Layer" is worked out first, then this round's $Layer put in.
+					run(bl, round.substitute(expandVars(round.substitute(bl.code), vars)))
+				}
+			}
+			continue
+		}
+		if inLoop[l.n] {
+			continue // read above, once per value
+		}
+		run(l, l.code)
 	}
 }
 
@@ -313,6 +336,9 @@ func (s *scan) describe(st *model.Step, tool, args, here string, resolve func(st
 				}
 			}
 			st.Template = file
+			if d.cloud == "aws" {
+				st.Stack = strings.Trim(flag("--stack-name"), `"'`)
+			}
 			st.Params = deployParams(args)
 			if f, ok := st.Params["@"]; ok {
 				st.Params["@"] = resolve(f)
@@ -349,6 +375,7 @@ func (s *scan) describe(st *model.Step, tool, args, here string, resolve func(st
 		}
 	case tool == "aws" && words[0] == "iam" && len(created) == 0 && awsIAMWords[op] != "":
 		st.Says = awsIAM(op, flag)
+		st.Deletes = strings.HasPrefix(op, "delete-")
 	case len(created) > 0:
 		var names, extra []string
 		for _, n := range created {
@@ -421,7 +448,7 @@ func (s *scan) describe(st *model.Step, tool, args, here string, resolve func(st
 	case tool == "aws" && regexp.MustCompile(`^s3\s+(cp|sync|mv)\b`).MatchString(args):
 		src := strings.Trim(firstOr(words, 2), `"'`)
 		dst := strings.Trim(firstOr(words, 3), `"'`)
-		st.From = path.Join(here, resolve(src))
+		st.From = localPath(here, resolve(src))
 		st.Says = fmt.Sprintf("Copies %s to %s", st.From, dst)
 		if m := s3Target.FindStringSubmatch(dst); m != nil {
 			target(m[1])
@@ -569,10 +596,35 @@ func (s *scan) describe(st *model.Step, tool, args, here string, resolve func(st
 	case tool == "aws" && (strings.HasPrefix(op, "detach-") || strings.HasPrefix(op, "disassociate-")):
 		thing := strings.ReplaceAll(strings.TrimPrefix(strings.TrimPrefix(op, "detach-"), "disassociate-"), "-", " ")
 		st.Says = strings.TrimSpace("Disconnects the " + thing + " " + firstNonEmpty(flag("--internet-gateway-id"), flag("--association-id"), awsNameFlag(flag)))
+	case tool == "aws" && words[0] == "rds" && (op == "delete-db-instance" || op == "delete-db-cluster"):
+		st.Deletes = true
+		db := firstNonEmpty(flag("--db-instance-identifier"), flag("--db-cluster-identifier"))
+		st.Says = "Deletes the RDS database " + db
+		if strings.Contains(args, "--skip-final-snapshot") {
+			st.Says += " and all the data in it, with no final snapshot"
+			if strings.Contains(args, "--delete-automated-backups") {
+				st.Says += " and without its automatic backups"
+			}
+			st.Says += ", so it cannot be brought back"
+			s.g.Add(model.Medium, s.me, "Database is deleted without a final copy",
+				"--skip-final-snapshot deletes the database and all its data with nothing to restore from"+
+					map[bool]string{true: ", and --delete-automated-backups removes the automatic backups too", false: ""}[strings.Contains(args, "--delete-automated-backups")]+
+					". Use --final-db-snapshot-identifier instead, unless the data really may be lost.", s.f.Path, st.Line)
+		} else {
+			st.Says += ". AWS keeps a final snapshot of it"
+		}
+	case tool == "aws" && words[0] == "cloudformation" && op == "delete-stack":
+		st.Deletes = true
+		st.Stack = strings.Trim(flag("--stack-name"), `"'`)
+		st.Says = "Deletes the CloudFormation stack " + st.Stack + " and everything it built"
 	case tool == "aws" && strings.HasPrefix(op, "delete-"):
 		st.Deletes = true
 		thing := strings.ReplaceAll(strings.TrimPrefix(op, "delete-"), "-", " ")
-		st.Says = strings.TrimSpace("Deletes the " + strings.ToUpper(words[0]) + " " + thing + " " + awsNameFlag(flag))
+		svc := awsService(words[0]) + " "
+		if words[0] == "ec2" {
+			svc = "" // a subnet or a security group, not "the EC2 subnet"
+		}
+		st.Says = strings.TrimSpace("Deletes the " + svc + thing + " " + awsNameFlag(flag))
 	case tool == "az" && regexp.MustCompile(`\bdelete\b`).MatchString(verb):
 		st.Deletes = true
 		thing := strings.TrimSuffix(verb, " delete")
@@ -775,6 +827,9 @@ var awsIAMWords = map[string]string{
 	"detach-role-policy":                "Takes the policy %[2]s away from the role %[4]s",
 	"add-user-to-group":                 "Puts the user %[3]s in the group %[1]s",
 	"remove-user-from-group":            "Takes the user %[3]s out of the group %[1]s",
+	"delete-role-policy":                "Deletes the policy %[6]s from the role %[4]s",
+	"delete-user-policy":                "Deletes the policy %[6]s from the user %[3]s",
+	"delete-group-policy":               "Deletes the policy %[6]s from the group %[1]s",
 	"put-role-policy":                   "Gives the role %[4]s the rights in %[5]s (policy %[6]s)",
 	"put-user-policy":                   "Gives the user %[3]s the rights in %[5]s (policy %[6]s)",
 	"put-group-policy":                  "Gives the group %[1]s the rights in %[5]s (policy %[6]s)",
@@ -791,6 +846,32 @@ func awsIAM(op string, flag func(...string) string) string {
 	}
 	doc := strings.TrimPrefix(strings.TrimPrefix(flag("--policy-document"), "file://"), "fileb://")
 	return fmt.Sprintf(awsIAMWords[op], flag("--group-name"), policy, flag("--user-name"), flag("--role-name"), doc, flag("--policy-name"), flag("--instance-profile-name"))
+}
+
+// localPath puts a path the script names in the folder the script is in, unless it is already a full path
+// (/tmp/x, ~/x, C:\x, $HOME/x), which stays as it is.
+func localPath(here, p string) string {
+	if strings.HasPrefix(p, "/") || strings.HasPrefix(p, "~") || strings.HasPrefix(p, "$") || strings.HasPrefix(p, `\`) ||
+		(len(p) > 2 && p[1] == ':' && (p[2] == '\\' || p[2] == '/')) {
+		return p
+	}
+	return path.Join(here, p)
+}
+
+// awsServices are the names AWS itself uses for the services, for what a step says.
+var awsServices = map[string]string{
+	"cloudformation": "CloudFormation", "ec2": "EC2", "s3": "S3", "s3api": "S3", "iam": "IAM", "rds": "RDS", "lambda": "Lambda",
+	"dynamodb": "DynamoDB", "ecs": "ECS", "eks": "EKS", "ecr": "ECR", "efs": "EFS", "elbv2": "load balancer", "elb": "load balancer",
+	"sns": "SNS", "sqs": "SQS", "kms": "KMS", "secretsmanager": "Secrets Manager", "ssm": "Systems Manager", "logs": "CloudWatch Logs",
+	"cloudwatch": "CloudWatch", "route53": "Route 53", "cloudfront": "CloudFront", "apigateway": "API Gateway", "apigatewayv2": "API Gateway",
+	"autoscaling": "Auto Scaling", "elasticache": "ElastiCache", "events": "EventBridge", "sts": "STS", "acm": "certificate manager",
+}
+
+func awsService(name string) string {
+	if s, ok := awsServices[strings.ToLower(name)]; ok {
+		return s
+	}
+	return strings.ToUpper(name)
 }
 
 // awsNameFlag is the name an AWS command gives what it acts on.
@@ -879,6 +960,116 @@ func scriptFunctions(lines []line, kind source.Kind) (map[string]*scriptFunc, ma
 		i = j - 1
 	}
 	return funcs, inFunc
+}
+
+// A loop over values written in the script, such as
+// foreach ($Layer in "webb", "data", "natverk") { … } or for x in a b c; do … done.
+// Its body is read once per value, so each round is its own step with a real name.
+type scriptLoop struct {
+	variable string
+	values   []string
+	body     []line
+}
+
+var (
+	psForeach = regexp.MustCompile(`(?i)^\s*foreach\s*\(\s*\$(\w+)\s+in\s+(.+?)\s*\)\s*(\{)?\s*$`)
+	shFor     = regexp.MustCompile(`^\s*for\s+(\w+)\s+in\s+(.+?)\s*(?:;\s*do)?\s*$`)
+	shForDo   = regexp.MustCompile(`;\s*do\s*$`)
+	shDo      = regexp.MustCompile(`^\s*do\s*$`)
+	shOpens   = regexp.MustCompile(`^\s*(for|while|until|select)\b.*\bdo\s*$|^\s*do\s*$`)
+	shDone    = regexp.MustCompile(`^\s*done\b`)
+)
+
+// loopValues are the values of a loop, only when every one is written out in the script.
+func loopValues(list string, kind source.Kind) []string {
+	if kind == source.PowerShell {
+		list = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(list), "@("), ")")
+	}
+	var out []string
+	for _, v := range callArg.FindAllString(list, -1) {
+		v = strings.TrimSpace(strings.Trim(strings.TrimSpace(v), ","))
+		if v == "" {
+			continue
+		}
+		v = strings.Trim(v, `"'`)
+		if strings.ContainsAny(v, "$*?`(") || v == "" {
+			return nil // worked out when it runs, such as $(ls) or *.txt
+		}
+		out = append(out, v)
+	}
+	if len(out) == 0 || len(out) > 20 {
+		return nil
+	}
+	return out
+}
+
+// scriptLoops finds the loops over written-out values and the lines inside them.
+func scriptLoops(lines []line, kind source.Kind) (map[int]*scriptLoop, map[int]bool) {
+	loops := map[int]*scriptLoop{}
+	inLoop := map[int]bool{}
+	for i := 0; i < len(lines); i++ {
+		code := lines[i].code
+		lp := &scriptLoop{}
+		j := i + 1
+		if kind == source.PowerShell {
+			m := psForeach.FindStringSubmatch(code)
+			if m == nil {
+				continue
+			}
+			lp.variable, lp.values = m[1], loopValues(m[2], kind)
+			depth := 0
+			if m[3] == "{" {
+				depth = 1
+			} else if j < len(lines) && strings.TrimSpace(lines[j].code) == "{" {
+				depth = 1
+				j++
+			}
+			for ; j < len(lines) && depth > 0; j++ {
+				c := lines[j].code
+				depth += strings.Count(c, "{") - strings.Count(c, "}")
+				if depth > 0 || strings.TrimSpace(c) != "}" {
+					lp.body = append(lp.body, lines[j])
+				}
+			}
+		} else {
+			m := shFor.FindStringSubmatch(code)
+			if m == nil {
+				continue
+			}
+			lp.variable, lp.values = m[1], loopValues(m[2], kind)
+			if !shForDo.MatchString(code) {
+				if j < len(lines) && shDo.MatchString(lines[j].code) {
+					j++
+				} else {
+					continue
+				}
+			}
+			for depth := 1; j < len(lines); j++ {
+				c := lines[j].code
+				if shOpens.MatchString(c) {
+					depth++
+				}
+				if shDone.MatchString(c) {
+					depth--
+					if depth == 0 {
+						j++
+						break
+					}
+				}
+				lp.body = append(lp.body, lines[j])
+			}
+		}
+		if lp.values == nil {
+			continue // read as written, once
+		}
+		inLoop[lines[i].n] = true
+		for k := i + 1; k < j; k++ {
+			inLoop[lines[k].n] = true
+		}
+		loops[lines[i].n] = lp
+		i = j - 1
+	}
+	return loops, inLoop
 }
 
 // callOf reports whether a line calls one of the script's functions, and

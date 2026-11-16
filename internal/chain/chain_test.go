@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Idris1980/lookfirst/internal/analyze"
+	"github.com/Idris1980/lookfirst/internal/explain"
 )
 
 func write(t *testing.T, dir string, files map[string]string) {
@@ -170,6 +171,127 @@ docker compose up -d
 	}
 }
 
+// A teardown loop, a stack whose database goes without a copy, a server's
+// user data, a backup from /tmp on the server and the metadata service:
+// each was once said wrong, or not at all.
+func TestStacksLoopsAndUserData(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{
+		"deploy.ps1": `param([string]$Prefix = "shop")
+aws cloudformation deploy --template-file data.yaml --stack-name "$Prefix-data"
+aws cloudformation deploy --template-file web.yaml --stack-name "$Prefix-web"
+`,
+		"destroy.ps1": `param([string]$Prefix = "shop")
+foreach ($Layer in "web", "data") {
+    $Stack = "$Prefix-$Layer"
+    aws cloudformation delete-stack --stack-name $Stack
+    aws cloudformation wait stack-delete-complete --stack-name $Stack
+}
+`,
+		"backup.sh": `#!/bin/bash
+DUMP="/tmp/db.sql"
+aws s3 cp "$DUMP" "s3://shop-backup/"
+`,
+		"restore.sh": `#!/bin/bash
+TOKEN=$(curl -sS -X PUT http://169.254.169.254/latest/api/token -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+IP=$(curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
+`,
+		"data.yaml": `AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  Files:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+  Db:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      Engine: mysql
+      DBInstanceClass: db.t3.micro
+      AllocatedStorage: "20"
+      StorageEncrypted: true
+`,
+		"web.yaml": `AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  Ami:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+Resources:
+  Web:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref Ami
+      InstanceType: t3.micro
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          dnf install -y httpd
+          curl -sSLo /tmp/app.tgz https://example.com/app.tgz
+          systemctl enable --now httpd php-fpm
+`,
+	})
+	chains := build(t, dir)
+	byTitle := map[string][]string{}
+	for _, c := range chains {
+		byTitle[c.Title] = flat(c.Items)
+	}
+	expect(t, byTitle["When deploy.ps1 is run"],
+		"2 Hands the template web.yaml to AWS to build",
+		"2.1 Creates the EC2 server Web",
+		"2.1.1 When it starts, installs httpd",
+		"2.1.2 When it starts, downloads https://example.com/app.tgz",
+		"2.1.3 When it starts, starts the services httpd and php-fpm and makes them start every time",
+	)
+	expect(t, byTitle["When destroy.ps1 is run"],
+		"1 Deletes the CloudFormation stack shop-web and everything it built",
+		"1.1 Deletes the EC2 server Web",
+		"2 Deletes the CloudFormation stack shop-data and everything it built",
+		"2.1 Deletes the RDS database Db and all the data in it. No copy is kept",
+		"2.2 Deletes the EFS file system Files and all the data in it",
+	)
+	expect(t, byTitle["When backup.sh is run"], "1 Copies /tmp/db.sql to s3://shop-backup/")
+	expect(t, byTitle["When restore.sh is run"],
+		"1 Asks the cloud server's own metadata service for latest/api/token",
+		"2 Asks the cloud server's own metadata service for latest/meta-data/public-ipv4")
+	for _, lines := range byTitle {
+		for _, l := range lines {
+			if strings.Contains(l, "$Layer") || strings.Contains(l, "CLOUDFORMATION") || strings.Contains(l, "public-ipv4)") || strings.Contains(l, "on the internet example.com") {
+				t.Errorf("said wrong: %q", l)
+			}
+		}
+	}
+
+	projects, err := analyze.Paths([]string{dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := analyze.Merge(projects)
+	titles := map[string]bool{}
+	for _, f := range g.Findings {
+		titles[f.Title] = true
+	}
+	for _, want := range []string{"Database is deleted without a final copy"} {
+		if !titles[want] {
+			t.Errorf("missing finding %q", want)
+		}
+	}
+	// Amazon Linux 2023 requires IMDSv2; the metadata service is not the internet; a server starting its services is normal.
+	for _, not := range []string{"Unencrypted connection", "Old metadata service may be on", "Makes something start automatically", "Syntax error"} {
+		if titles[not] {
+			t.Errorf("finding %q should not be there", not)
+		}
+	}
+	summary := strings.Join(explain.Summary(g), " ")
+	for _, want := range []string{"on the internet: example.com", "own metadata service (169.254.169.254)"} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary misses %q:\n%s", want, summary)
+		}
+	}
+	if strings.Contains(summary, "169.254.169.254 and") || strings.Contains(summary, "169.254.169.254.") && strings.Contains(summary, "internet: 169") {
+		t.Errorf("the metadata service is counted as the internet:\n%s", summary)
+	}
+}
+
 // Infrastructure code no script deploys gets a chain of its own, in the
 // order the cloud must build it.
 func TestTemplateOnItsOwn(t *testing.T) {
@@ -255,5 +377,43 @@ func TestNeedsWhatExists(t *testing.T) {
 	expect(t, flat(tf.Items), "- Uses the existing VPC main", "1 Creates the subnet a")
 	if !tf.Items[0].Existing {
 		t.Error("a data source is used, not created")
+	}
+}
+
+// A teardown script: names found with describe and kept in variables, inline
+// policies, plain words for EC2 parts, and a database deleted with no copy.
+func TestTeardownScript(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, map[string]string{
+		"destroy.ps1": `$SgNamn = "shop-web-sg"
+$Instanser = aws ec2 describe-instances --filters "Name=tag:Name,Values=shop-web" --query "Reservations[].Instances[].InstanceId" --output text
+$Lista = $Instanser -split "\s+"
+aws ec2 terminate-instances --instance-ids $Lista
+$SgId = aws ec2 describe-security-groups --filters "Name=group-name,Values=$SgNamn" --query "SecurityGroups[0].GroupId" --output text
+aws ec2 delete-security-group --group-id $SgId
+aws iam delete-role-policy --role-name shop-app --policy-name read-files
+aws iam delete-role-policy --role-name shop-app --policy-name write-backup
+aws rds delete-db-instance --db-instance-identifier shop-db --skip-final-snapshot --delete-automated-backups
+`,
+	})
+	chains := build(t, dir)
+	if len(chains) == 0 {
+		t.Fatal("no chain")
+	}
+	expect(t, flat(chains[0].Items),
+		"1 Stops and deletes the EC2 server shop-web",
+		"2 Deletes the security group shop-web-sg",
+		"3 Deletes the policy read-files from the role shop-app",
+		"4 Deletes the policy write-backup from the role shop-app",
+		"5 Deletes the RDS database shop-db and all the data in it, with no final snapshot and without its automatic backups",
+	)
+	found := false
+	for _, it := range chains[0].Items {
+		for _, r := range it.Risks {
+			found = found || r.Title == "Database is deleted without a final copy"
+		}
+	}
+	if !found {
+		t.Error("deleting the database with --skip-final-snapshot should carry the finding")
 	}
 }

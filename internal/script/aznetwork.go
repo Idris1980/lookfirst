@@ -107,9 +107,18 @@ var (
 
 // stringVars collects variables set to plain text, such as VNET="vnet-a"
 // or $vmName = "vm-web", so names given through them can be read.
+var paramDefault = regexp.MustCompile(`\$(\w+)\s*=\s*("[^"$]*"|'[^']*'|[\w.-]+)`)
+
 func stringVars(lines []line) map[string]string {
 	vars := map[string]string{}
 	for _, l := range lines {
+		// param([string]$Prefix = "shop", [int]$Count = 2) on one line: each default.
+		if psParamLine.MatchString(l.code) {
+			for _, m := range paramDefault.FindAllStringSubmatch(l.code, -1) {
+				vars[strings.ToLower(m[1])] = strings.Trim(m[2], `"'`)
+			}
+			continue
+		}
 		var name, value string
 		if m := psVar.FindStringSubmatch(l.code); m != nil {
 			name, value = m[1], m[2]+m[3]

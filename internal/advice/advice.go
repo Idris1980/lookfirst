@@ -123,6 +123,18 @@ var (
 
 // --- What each finding means --------------------------------------------
 
+var imdsV1 = Advice{
+	Story: "Every EC2 server can ask its metadata service for temporary AWS keys with the server's permissions. The old version (IMDSv1) answers any web request from the server, so a web app that can be tricked into fetching an address (server-side request forgery) hands those keys to an attacker. That is how the Capital One breach in 2019 happened.",
+	Fix: []string{
+		"Require the new version: HttpTokens: required in a launch template's MetadataOptions, or http_tokens = \"required\" in Terraform's metadata_options.",
+		"Or start from an image that requires it already, such as Amazon Linux 2023.",
+		"Scripts on the server keep working if they fetch a token first, as the AWS CLI and SDKs do.",
+	},
+	AWS: []Ref{fsbp("EC2.8", "EC2 instances should use Instance Metadata Service Version 2 (IMDSv2)"),
+		fsbp("EC2.170", "EC2 launch templates should use Instance Metadata Service Version 2 (IMDSv2)"),
+		doc("Amazon EC2: configure the instance metadata service", "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html")},
+}
+
 var openLoginPort = Advice{
 	Story: "Robots scan the whole internet around the clock and find a newly opened login port within minutes. They then try thousands of user names and passwords, or a known weakness in the login service. If one attempt works, they control the server: they can read its data, use it to attack others, or mine cryptocurrency on your bill.",
 	Fix: []string{
@@ -331,6 +343,19 @@ var exact = map[string]Advice{
 		Fix:   []string{"Turn encryption at rest on; the cloud provider handles the keys for you unless you choose your own."},
 		AWS:   []Ref{fsbp("RDS.3", "RDS DB instances should have encryption at-rest enabled"), fsbp("EC2.3", "Attached Amazon EBS volumes should be encrypted at-rest"), fsbp("EFS.1", "Elastic File System should be configured to encrypt file data at-rest using AWS KMS")},
 		Azure: []Ref{dp4},
+	},
+	"Old metadata service is on":     imdsV1,
+	"Old metadata service may be on": imdsV1,
+	"Database is deleted without a final copy": {
+		Story: "Deleting the stack, or running terraform destroy, also deletes the database and everything in it. With no final snapshot there is nothing to restore from: a mistaken teardown, or a name typed wrong, loses the data for good.",
+		Fix: []string{
+			"Keep a final copy: DeletionPolicy: Snapshot (AWS's default) in CloudFormation, or skip_final_snapshot = false with a final_snapshot_identifier in Terraform.",
+			"For data that must survive, also turn on deletion protection, and back up before every teardown.",
+			"Only skip the copy for test data that may really be lost.",
+		},
+		AWS: []Ref{fsbp("RDS.8", "RDS DB instances should have deletion protection enabled"),
+			doc("AWS CloudFormation: the DeletionPolicy attribute", "https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html")},
+		Azure: []Ref{mcsb("BR-1", "Ensure regular automated backups")},
 	},
 	"Unencrypted traffic is allowed": {
 		Story: "Data can travel over plain HTTP, where anyone on the network path, such as a public Wi-Fi, can read or change it.",

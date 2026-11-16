@@ -110,6 +110,11 @@ func Files(files []source.File) *model.Graph {
 	}
 	if fs := byKind[source.CloudFormation]; len(fs) > 0 {
 		g.Merge(cloudformation.Read(fs))
+		for _, f := range fs {
+			for _, st := range cloudformation.Startups(f) {
+				startup(g, f.Path, st)
+			}
+		}
 	}
 	if fs := byKind[source.Compose]; len(fs) > 0 {
 		g.Merge(compose.Read(fs))
@@ -130,6 +135,44 @@ func Files(files []source.File) *model.Graph {
 	leftovers(g, files)
 	g.Sort()
 	return g
+}
+
+// startup reads a script written into a template, such as a server's user
+// data, as the shell script it is. What it finds is put on the template's
+// own lines and on the server that runs it: its risks, the places it talks
+// to, and what it does when the server starts.
+func startup(g *model.Graph, file string, st cloudformation.Startup) {
+	owner := g.Node(st.Node)
+	if owner == nil {
+		return
+	}
+	sg := script.Read([]source.File{{Path: file, Kind: source.Shell, Data: []byte(st.Text)}})
+	for _, f := range sg.Findings {
+		// A server that switches on its own services at start is what user data is for, not a sign of malware.
+		if f.Title == "Makes something start automatically" {
+			continue
+		}
+		f.Line += st.Offset
+		f.NodeID = st.Node
+		if f.Detail != "" {
+			f.Detail = "In the script the server runs when it starts (user data): " + f.Detail
+		}
+		g.Findings = append(g.Findings, f)
+	}
+	for _, n := range sg.Nodes {
+		if !strings.HasPrefix(n.ID, "host.") {
+			continue // the script's own box and the programs it runs belong to the server
+		}
+		c := *n
+		c.Line += st.Offset
+		g.AddNode(&c)
+		g.Connect(st.Node, c.ID, "when it starts", false)
+	}
+	for _, s := range sg.Steps {
+		s.Line += st.Offset
+		s.File = file
+		owner.Startup = append(owner.Startup, s)
+	}
 }
 
 // leftovers reports placeholders such as "YOUR_IP_ADDRESS" in any kind of

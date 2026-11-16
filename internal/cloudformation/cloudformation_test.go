@@ -1,6 +1,7 @@
 package cloudformation
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Idris1980/lookfirst/internal/source"
@@ -84,5 +85,71 @@ func TestShortFormsAndUnknownTypes(t *testing.T) {
 	}
 	if !edges["cfn.Pipe>cfn.Stream"] || !edges["cfn.Pipe>cfn.Queue"] {
 		t.Errorf("!GetAtt and !Sub did not give lines: %v", g.Edges)
+	}
+}
+
+// What happens to data when the stack is deleted, the old metadata service,
+// and the script a server runs when it starts.
+func TestDeletionMetadataAndUserData(t *testing.T) {
+	text := `AWSTemplateFormatVersion: "2010-09-09"
+Parameters:
+  OldAmi:
+    Type: String
+    Default: ami-123
+Resources:
+  GoneDb:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties: {Engine: mysql}
+  SafeDb:
+    Type: AWS::RDS::DBInstance
+    Properties: {Engine: mysql}
+  Files:
+    Type: AWS::EFS::FileSystem
+  OpenTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref OldAmi
+        MetadataOptions: {HttpTokens: optional}
+  OldServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref OldAmi
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          curl -sS https://example.com/x
+`
+	f := source.File{Path: "t.yaml", Kind: source.CloudFormation, Data: []byte(text)}
+	g := Read([]source.File{f})
+	count := map[string]int{}
+	for _, x := range g.Findings {
+		count[x.Title+"|"+x.NodeID]++
+	}
+	for _, want := range []string{
+		"Database is deleted without a final copy|cfn.GoneDb",
+		"Old metadata service is on|cfn.OpenTemplate",
+		"Old metadata service may be on|cfn.OldServer",
+	} {
+		if count[want] != 1 {
+			t.Errorf("want one %q, got %v", want, count)
+		}
+	}
+	if count["Database is deleted without a final copy|cfn.SafeDb"] != 0 {
+		t.Error("a database with AWS's default keeps a final snapshot")
+	}
+	for id, want := range map[string]string{"cfn.GoneDb": "lost", "cfn.SafeDb": "snapshot", "cfn.Files": "lost"} {
+		if n := g.Node(id); n == nil || n.OnDelete != want {
+			t.Errorf("%s: want OnDelete %q, got %+v", id, want, n)
+		}
+	}
+	st := Startups(f)
+	if len(st) != 1 || st[0].Node != "cfn.OldServer" || !strings.Contains(st[0].Text, "curl -sS https://example.com/x") {
+		t.Fatalf("user data: %+v", st)
+	}
+	// The script's second line is line 30 of the template.
+	if lines := strings.Split(text, "\n"); !strings.Contains(lines[st[0].Offset+2-1], "curl") {
+		t.Errorf("offset %d does not point at the script's lines", st[0].Offset)
 	}
 }

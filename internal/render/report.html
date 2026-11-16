@@ -285,7 +285,7 @@ details.inventory > summary h2 { display: inline; }
           <div class="says">{{.Says}}</div>
           {{if gt (len .Boxes) 1}}<div class="stepboxes">Review cards: {{range .Boxes}}<a href="#{{.Card}}">{{.Name}}</a>{{end}}</div>{{end}}
           {{if .Note}}<div class="note-line">{{.Note}}</div>{{end}}
-          {{if .From}}<div class="note-line">Takes <code>{{.From}}</code> from your computer.</div>{{end}}
+          {{if .From}}<div class="note-line">Takes <code>{{.From}}</code> from the machine the script runs on.</div>{{end}}
           {{if .Where}}<div class="where">{{if .Href}}<a href="{{.Href}}">{{.Where}}</a>{{else}}{{.Where}}{{end}}{{if eq (len .Boxes) 1}}{{range .Boxes}} · <a class="cardlink" href="#{{.Card}}">review card</a>{{end}}{{end}}{{if .Code}} · <code>{{.Code}}</code>{{end}}</div>{{end}}
           {{range .Needs}}<div class="stepneed"><span class="tag">needs</span> {{.}}, which this code does not create. It must be there before you run it.</div>{{end}}
           {{range .Uses}}<div class="stepuse"><span class="tag">uses</span> {{.}}</div>{{end}}

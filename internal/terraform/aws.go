@@ -33,6 +33,9 @@ var policyAttrs = map[string]string{
 	"aws_secretsmanager_secret": "policy",
 }
 
+// imdsAdvice explains the old instance metadata service, IMDSv1.
+const imdsAdvice = "The server's metadata service hands out the server's temporary AWS keys. The old version (IMDSv1) answers anyone who can make the server send a web request, so a weakness in a web app on the server can be used to steal those keys."
+
 // awsChecks holds the AWS rules beyond the network ones in check.
 func awsChecks(c *config, g *model.Graph) {
 	for _, r := range c.resources {
@@ -68,6 +71,26 @@ func awsChecks(c *config, g *model.Graph) {
 		case "aws_db_instance", "aws_rds_cluster", "aws_docdb_cluster", "aws_neptune_cluster":
 			if v, set := boolean(r.body, "storage_encrypted"); set && !v {
 				add(model.Medium, "Data is not encrypted", "storage_encrypted = false stores the data unencrypted. Set it to true.", "storage_encrypted")
+			}
+			if v, set := boolean(r.body, "skip_final_snapshot"); set && v {
+				add(model.Medium, "Database is deleted without a final copy",
+					"skip_final_snapshot = true means that terraform destroy, or replacing the database, deletes it and all its data with no final snapshot to restore from. "+
+						"Set it to false and give final_snapshot_identifier, unless the data really may be lost, as in a test environment.", "skip_final_snapshot")
+			}
+		case "aws_instance", "aws_launch_template":
+			// The old instance metadata service (IMDSv1) is on unless switched off here, or by an image that requires IMDSv2.
+			tokens, found := "", false
+			for _, b := range r.body.Blocks {
+				if b.Type == "metadata_options" {
+					found = true
+					tokens, _ = str(b.Body, "http_tokens")
+					if tokens == "optional" {
+						g.Add(model.Medium, me, "Old metadata service is on", imdsAdvice+" Set http_tokens = \"required\".", r.file, line(b.Body, "http_tokens", r.line))
+					}
+				}
+			}
+			if !found {
+				add(model.Low, "Old metadata service may be on", imdsAdvice+" Add a metadata_options block with http_tokens = \"required\", unless the image already requires IMDSv2, as Amazon Linux 2023 does.", "ami")
 			}
 		case "aws_rds_cluster_instance", "aws_redshift_cluster", "aws_mq_broker", "aws_dms_replication_instance":
 			if v, set := boolean(r.body, "publicly_accessible"); set && v {

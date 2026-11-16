@@ -18,6 +18,9 @@ import (
 	"github.com/Idris1980/lookfirst/internal/yamlx"
 )
 
+// imdsAdvice explains the old instance metadata service, IMDSv1.
+const imdsAdvice = "The server's metadata service hands out the server's temporary AWS keys. The old version (IMDSv1) answers anyone who can make the server send a web request, so a weakness in a web app on the server can be used to steal those keys."
+
 const secretFix = "use a parameter with NoEcho: true, or a dynamic reference to Secrets Manager such as {{resolve:secretsmanager:name}}"
 
 func Read(files []source.File) *model.Graph {
@@ -40,9 +43,57 @@ type resource struct {
 func id(name string) string { return "cfn." + name }
 
 type reader struct {
-	g    *model.Graph
-	file string
-	res  map[string]*resource
+	g        *model.Graph
+	file     string
+	res      map[string]*resource
+	defaults map[string]string // parameter -> its default value, when written out
+}
+
+// What deleting the stack does to the data in each kind of resource, when
+// the template does not say (AWS's own defaults): databases get a final
+// snapshot, file systems, tables and disks are deleted with what is in them.
+var keepsData = map[string]string{
+	"AWS::RDS::DBInstance": model.Snapshot, "AWS::RDS::DBCluster": model.Snapshot, "AWS::Redshift::Cluster": model.Snapshot,
+	"AWS::Neptune::DBCluster": model.Snapshot, "AWS::DocDB::DBCluster": model.Snapshot,
+	"AWS::EFS::FileSystem": model.Lost, "AWS::DynamoDB::Table": model.Lost, "AWS::DynamoDB::GlobalTable": model.Lost,
+	"AWS::EC2::Volume": model.Lost, "AWS::ElastiCache::ReplicationGroup": model.Lost, "AWS::OpenSearchService::Domain": model.Lost,
+	"AWS::S3::Bucket": model.Kept, // a bucket with files in it cannot be deleted; the stack stops instead
+}
+
+// onDelete is what happens to a resource's data when its stack is deleted.
+func onDelete(res *resource) string {
+	def, holdsData := keepsData[res.typ]
+	if !holdsData {
+		return ""
+	}
+	switch p, _ := literal(yamlx.Get(res.body, "DeletionPolicy")); p {
+	case "Delete":
+		if res.typ == "AWS::S3::Bucket" {
+			return model.Kept
+		}
+		return model.Lost
+	case "Snapshot":
+		return model.Snapshot
+	case "Retain", "RetainExceptOnCreate":
+		return model.Kept
+	}
+	return def
+}
+
+// imdsV2Image reports whether the server's image is one that only answers
+// the new metadata service (IMDSv2), such as Amazon Linux 2023, which AWS
+// marks with ImdsSupport v2.0.
+func (r *reader) imdsV2Image(image *yaml.Node) bool {
+	v, ok := literal(image)
+	if !ok {
+		for _, to := range refs(image) {
+			v += r.defaults[to]
+		}
+		if v == "" {
+			v = yamlx.Str(image) // {{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-…}}
+		}
+	}
+	return strings.Contains(strings.ToLower(v), "al2023")
 }
 
 func readFile(g *model.Graph, f source.File) {
@@ -72,7 +123,7 @@ func readFile(g *model.Graph, f source.File) {
 		g.AddNode(&model.Node{
 			ID: id(res.name), Name: res.name, Kind: e.kind, Friendly: e.friendly, Code: res.name + ": " + res.typ,
 			Cloud: "aws", Type: res.typ, Category: e.category, File: f.Path, Line: res.key.Line,
-			Address: yamlx.Str(yamlx.Get(res.props, "CidrBlock")),
+			Address: yamlx.Str(yamlx.Get(res.props, "CidrBlock")), OnDelete: onDelete(res),
 		})
 	}
 	// A line for every reference (!Ref, !GetAtt, !Sub, DependsOn) between
@@ -100,10 +151,78 @@ func readFile(g *model.Graph, f source.File) {
 	}
 
 	r.parameters(yamlx.Get(root, "Parameters"))
+	r.defaults = map[string]string{}
+	yamlx.Pairs(yamlx.Get(root, "Parameters"), func(k, v *yaml.Node) {
+		if d, ok := literal(yamlx.Get(v, "Default")); ok {
+			r.defaults[k.Value] = d
+		}
+	})
 	for _, res := range all {
 		r.check(res)
 		r.secrets(res, "", res.props)
 	}
+}
+
+// Startup is a script written into a template, such as a server's user
+// data, which the server runs the first time it starts.
+type Startup struct {
+	Node   string // the box it belongs to, such as "cfn.WebServer"
+	Offset int    // add to a line of Text to get the line in the template
+	Text   string
+}
+
+// Startups finds the user data scripts in a template: on servers and in
+// launch templates, written as Fn::Base64 of a string or of Fn::Sub.
+func Startups(f source.File) []Startup {
+	docs, err := yamlx.Documents(f.Data)
+	if err != nil || len(docs) == 0 {
+		return nil
+	}
+	var out []Startup
+	yamlx.Pairs(yamlx.Get(docs[0], "Resources"), func(k, v *yaml.Node) {
+		p := yamlx.Get(v, "Properties")
+		var ud *yaml.Node
+		switch yamlx.Str(yamlx.Get(v, "Type")) {
+		case "AWS::EC2::Instance":
+			ud = yamlx.Get(p, "UserData")
+		case "AWS::EC2::LaunchTemplate":
+			ud = yamlx.Path(p, "LaunchTemplateData", "UserData")
+		case "AWS::AutoScaling::LaunchConfiguration":
+			ud = yamlx.Get(p, "UserData")
+		default:
+			return
+		}
+		if text, n := scriptIn(ud); n != nil && strings.TrimSpace(text) != "" {
+			offset := n.Line - 1
+			if n.Style&(yaml.LiteralStyle|yaml.FoldedStyle) != 0 {
+				offset = n.Line // the text starts on the line after "|"
+			}
+			out = append(out, Startup{Node: id(k.Value), Offset: offset, Text: text})
+		}
+	})
+	return out
+}
+
+// scriptIn digs the script text out of Fn::Base64, !Base64, Fn::Sub and !Sub.
+func scriptIn(n *yaml.Node) (string, *yaml.Node) {
+	if n == nil {
+		return "", nil
+	}
+	switch n.Kind {
+	case yaml.ScalarNode:
+		return n.Value, n
+	case yaml.SequenceNode: // !Sub [text, {variables}]
+		if items := yamlx.Items(n); len(items) > 0 {
+			return scriptIn(items[0])
+		}
+	case yaml.MappingNode:
+		for _, k := range []string{"Fn::Base64", "Fn::Sub"} {
+			if v := yamlx.Get(n, k); v != nil {
+				return scriptIn(v)
+			}
+		}
+	}
+	return "", nil
 }
 
 // node is the box findings about a resource belong to: its own, or that of
@@ -262,7 +381,25 @@ func (r *reader) check(res *resource) {
 				add(model.Low, me, "Reachable from the internet", "This server gets a public IP address. Check which ports its security group opens.", v)
 			}
 		}
+		// A server started from a launch template gets its metadata settings there, and that is checked below.
+		if yamlx.Get(p, "LaunchTemplate") == nil && !r.imdsV2Image(yamlx.Get(p, "ImageId")) {
+			add(model.Low, me, "Old metadata service may be on", imdsAdvice+" An AWS::EC2::Instance cannot set it itself: start it from a launch template with MetadataOptions HttpTokens: required, or from an image that requires IMDSv2, such as Amazon Linux 2023.", res.key)
+		}
+	case "AWS::EC2::LaunchTemplate":
+		data := yamlx.Get(p, "LaunchTemplateData")
+		tokens := yamlx.Path(data, "MetadataOptions", "HttpTokens")
+		switch v, _ := literal(tokens); {
+		case v == "optional":
+			add(model.Medium, me, "Old metadata service is on", imdsAdvice+" Set HttpTokens: required.", tokens)
+		case tokens == nil && !r.imdsV2Image(yamlx.Get(data, "ImageId")):
+			add(model.Low, me, "Old metadata service may be on", imdsAdvice+" Add MetadataOptions with HttpTokens: required.", res.key)
+		}
 	case "AWS::RDS::DBInstance", "AWS::RDS::DBCluster", "AWS::Redshift::Cluster", "AWS::DocDB::DBCluster", "AWS::Neptune::DBCluster":
+		if v := yamlx.Get(res.body, "DeletionPolicy"); yamlx.Str(v) == "Delete" {
+			add(model.Medium, me, "Database is deleted without a final copy",
+				"DeletionPolicy: Delete means that deleting the stack also deletes the database and all its data, with no final snapshot to restore from. "+
+					"Use Snapshot (AWS's default) or Retain, unless the data really may be lost, as in a test environment.", v)
+		}
 		if v := yamlx.Get(p, "PubliclyAccessible"); isTrue(v) {
 			r.g.Expose(me, "public endpoint", true)
 			add(model.High, me, "Database reachable from the internet", "PubliclyAccessible: true gives the database a public address. Set it to false and connect from inside the VPC.", v)

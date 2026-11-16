@@ -19,12 +19,16 @@ func Summary(g *model.Graph) []string {
 
 	counts := map[string]int{}
 	total := 0
-	var hosts, files, programs, packages, templates []string
+	var hosts, local, metadata, files, programs, packages, templates []string
 	for _, n := range g.Nodes {
 		switch {
 		case n.ID == model.InternetID, strings.HasPrefix(n.ID, "script."), n.Type == "principal", n.Type == "resource group":
 		case strings.HasPrefix(n.ID, "deploy."):
 			templates = append(templates, n.Name)
+		case strings.HasPrefix(n.ID, "host.") && n.Friendly == "the cloud server's own metadata service":
+			metadata = append(metadata, n.Name)
+		case strings.HasPrefix(n.ID, "host.") && n.Friendly == "on the local network":
+			local = append(local, n.Name)
 		case strings.HasPrefix(n.ID, "host."):
 			hosts = append(hosts, n.Name)
 		case strings.HasPrefix(n.ID, "file."):
@@ -44,12 +48,18 @@ func Summary(g *model.Graph) []string {
 		out = append(out, fmt.Sprintf("This code would create %s: %s.", plural(total, "resource"), list(counts)))
 	}
 	if len(templates) > 0 {
-		out = append(out, fmt.Sprintf("It hands %s to the cloud to build: %s. What %s builds is shown in %s own picture, under %s folder.",
+		out = append(out, fmt.Sprintf("It hands %s to the cloud to build: %s. What %s %s is shown in %s own picture, under %s folder.",
 			plural(len(templates), "template"), join(templates, 5), pick(len(templates), "that template", "those templates"),
-			pick(len(templates), "its", "their"), pick(len(templates), "its", "their")))
+			pick(len(templates), "builds", "build"), pick(len(templates), "its", "their"), pick(len(templates), "its", "their")))
 	}
 	if len(hosts) > 0 {
 		out = append(out, fmt.Sprintf("It talks to %s on the internet: %s.", plural(len(hosts), "place"), join(hosts, 5)))
+	}
+	if len(local) > 0 {
+		out = append(out, fmt.Sprintf("It talks to %s on the local network: %s.", plural(len(local), "machine"), join(local, 5)))
+	}
+	if len(metadata) > 0 {
+		out = append(out, fmt.Sprintf("It asks the cloud server's own metadata service (%s) about the server. That traffic stays on the machine.", join(metadata, 3)))
 	}
 	if len(files) > 0 {
 		out = append(out, fmt.Sprintf("It touches %s.", join(files, 5)))
@@ -65,14 +75,20 @@ func Summary(g *model.Graph) []string {
 	}
 
 	exposed := 0
+	var open []string
 	for _, e := range g.Edges {
 		if e.From == model.InternetID {
 			exposed++
+			if n := g.Node(e.To); n != nil {
+				open = append(open, n.Friendly+" "+n.Name)
+			}
 		}
 	}
 	switch {
 	case exposed == 1 && total == 0:
 		out = append(out, "Other machines on the network can connect to it.")
+	case len(open) > 0:
+		out = append(out, fmt.Sprintf("Reachable from the internet: %s.", join(open, 5)))
 	case exposed > 0:
 		out = append(out, fmt.Sprintf("%d of them would be reachable from the internet.", exposed))
 	}

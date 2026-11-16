@@ -1,6 +1,7 @@
 package terraform
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Idris1980/lookfirst/internal/source"
@@ -100,5 +101,41 @@ resource "aws_db_instance" "db" { storage_encrypted = false }
 	// Two policies allow everything: the data document and the heredoc.
 	if n := len(got["Permission to do everything"]); n != 2 {
 		t.Errorf("%d policies allowing everything, want 2: %v", n, got["Permission to do everything"])
+	}
+}
+
+// A database that goes without a copy, and the old metadata service.
+func TestDeletionAndMetadata(t *testing.T) {
+	tf := `
+resource "aws_db_instance" "gone" { skip_final_snapshot = true }
+resource "aws_db_instance" "kept" { skip_final_snapshot = false }
+resource "aws_instance" "open" {
+  ami = "ami-123"
+  metadata_options { http_tokens = "optional" }
+}
+resource "aws_instance" "unsure" { ami = "ami-123" }
+resource "aws_instance" "closed" {
+  ami = "ami-123"
+  metadata_options { http_tokens = "required" }
+}
+`
+	g := Read([]source.File{{Path: "main.tf", Kind: source.Terraform, Data: []byte(tf)}})
+	count := map[string]int{}
+	for _, f := range g.Findings {
+		count[f.Title+"|"+f.NodeID]++
+	}
+	for _, want := range []string{
+		"Database is deleted without a final copy|aws_db_instance.gone",
+		"Old metadata service is on|aws_instance.open",
+		"Old metadata service may be on|aws_instance.unsure",
+	} {
+		if count[want] != 1 {
+			t.Errorf("want one %q, got %d (%v)", want, count[want], count)
+		}
+	}
+	for k := range count {
+		if strings.Contains(k, "aws_db_instance.kept") || strings.Contains(k, "aws_instance.closed") {
+			t.Errorf("not a risk: %q", k)
+		}
 	}
 }

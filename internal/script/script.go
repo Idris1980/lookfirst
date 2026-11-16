@@ -70,7 +70,31 @@ func Read(files []source.File) *model.Graph {
 	}
 	rules.apply(g)
 	scriptOrder(g, files)
+	userDataScripts(g)
 	return g
+}
+
+// userDataScripts: a script that another script hands to a new server as
+// its user data, to set it up when it starts, is meant to switch on the
+// server's services. That is what it is for, not a sign of malware.
+func userDataScripts(g *model.Graph) {
+	setup := map[string]bool{}
+	for _, st := range g.Steps {
+		if st.From != "" && strings.HasSuffix(st.Says, " on it when it starts") {
+			setup[strings.ToLower(filepath.Clean(filepath.Join(filepath.Dir(st.File), filepath.FromSlash(st.From))))] = true
+		}
+	}
+	if len(setup) == 0 {
+		return
+	}
+	kept := g.Findings[:0]
+	for _, f := range g.Findings {
+		if f.Title == "Makes something start automatically" && setup[strings.ToLower(filepath.Clean(f.File))] {
+			continue
+		}
+		kept = append(kept, f)
+	}
+	g.Findings = kept
 }
 
 var afterWords = regexp.MustCompile(`(?i)\b(efter|after|first|before|först|requires|kräver|förutsätter)\b`)
@@ -226,6 +250,11 @@ func (s *scan) network() {
 			label = "sends data"
 		}
 		s.destination(host, label, l.n)
+		// The cloud server's own metadata service is on the machine itself:
+		// the traffic never leaves it, and there is no https to switch to.
+		if metadataHost(host) {
+			return
+		}
 
 		if !seen[host+"|why"] {
 			full := host + u.Path
@@ -253,11 +282,40 @@ func (s *scan) network() {
 	})
 }
 
+// Where a host is, as the report says it: on the internet, on the local
+// network, or the cloud server's own metadata service.
+const (
+	OnInternet = "on the internet"
+	OnLocalNet = "on the local network"
+	OnMetadata = "the cloud server's own metadata service"
+)
+
+// metadataHost is the address a cloud server asks about itself: its name,
+// its address and its temporary keys. AWS and Azure use 169.254.169.254,
+// AWS also fd00:ec2::254, ECS tasks 169.254.170.2, Google
+// metadata.google.internal and Alibaba 100.100.100.200.
+func metadataHost(h string) bool {
+	switch strings.Trim(strings.ToLower(h), "[]") {
+	case "169.254.169.254", "fd00:ec2::254", "169.254.170.2", "metadata.google.internal", "metadata", "100.100.100.200":
+		return true
+	}
+	return false
+}
+
 func (s *scan) destination(host, label string, ln int) {
 	id := "host." + host
-	kind := "globe"
-	s.g.AddNode(&model.Node{ID: id, Name: host, Kind: kind, Friendly: "on the internet", Category: model.Internet, File: s.f.Path, Line: ln})
+	kind, where, cat := "globe", OnInternet, model.Internet
+	switch {
+	case metadataHost(host):
+		kind, where, cat = "vm", OnMetadata, model.Network
+	case privateIP(host) || strings.HasSuffix(host, ".internal") || strings.HasSuffix(host, ".local") || !strings.ContainsAny(host, ".:"):
+		kind, where, cat = "vm", OnLocalNet, model.Network
+	}
+	s.g.AddNode(&model.Node{ID: id, Name: host, Kind: kind, Friendly: where, Category: cat, File: s.f.Path, Line: ln})
 	s.g.Connect(s.me, id, label, false)
+	if where != OnInternet {
+		return // not a place a stolen key could be sent to (see stealer)
+	}
 	for _, d := range s.destinations {
 		if d == host {
 			return
@@ -1084,7 +1142,8 @@ var sensitiveFiles = []struct {
 	what string
 }{
 	{regexp.MustCompile(`\.ssh[/\\]|id_rsa|id_ed25519|id_ecdsa`), "your SSH keys"},
-	{regexp.MustCompile(`\.aws[/\\]credentials|\.aws[/\\]config`), "your AWS credentials"},
+	{regexp.MustCompile(`\.aws[/\\]credentials`), "your AWS credentials"},
+	{regexp.MustCompile(`\.aws[/\\]config`), "your AWS settings (~/.aws/config), which decide which account and role the AWS CLI uses"},
 	{regexp.MustCompile(`\.azure[/\\]|msal_token_cache|accessTokens\.json`), "your Azure login"},
 	{regexp.MustCompile(`\.config[/\\]gcloud`), "your Google Cloud login"},
 	{regexp.MustCompile(`\.kube[/\\]config`), "your Kubernetes credentials"},

@@ -20,24 +20,33 @@ var (
 	localUpgrade    = regexp.MustCompile(`(?i)\b(apt-get|apt|yum|dnf)\s+(?:-\S+\s+)*(upgrade|dist-upgrade|full-upgrade)\b`)
 	localNpmGlobal  = regexp.MustCompile(`\bnpm\s+(?:install|i)\s+(?:-g|--global)\s+(.*)`)
 	localPip        = regexp.MustCompile(`\bpip3?\s+install\s+(.*)`)
-	localPipe       = regexp.MustCompile(`(?i)\b(curl|wget|Invoke-WebRequest|iwr|irm|Invoke-RestMethod)\b[^|]*?(https?://\S+)[^|]*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(bash|sh|zsh|python3?|iex|Invoke-Expression)`)
-	localDownload   = regexp.MustCompile(`(?i)\b(curl|wget|Invoke-WebRequest|iwr)\b.*?(https?://[^\s"']+)`)
-	localOutFile    = regexp.MustCompile(`(?i)(?:-o|-O|--output|-OutFile)\s+["']?([^\s"']+)`)
-	localGitClone   = regexp.MustCompile(`\bgit\s+clone\s+(?:-\S+\s+)*(\S+)`)
-	localService    = regexp.MustCompile(`(?i)\bsystemctl\s+(enable\s+--now|enable|start|restart)\s+(\S+)`)
-	localUser       = regexp.MustCompile(`(?i)\b(useradd|adduser|New-LocalUser)\s+(?:-\S+\s+\S+\s+)*["']?([\w.-]+)`)
-	localUsermod    = regexp.MustCompile(`(?i)\busermod\s+.*-aG\s+(\S+)\s+(\S+)`)
-	localFirewall   = regexp.MustCompile(`(?i)\b(?:ufw\s+allow\s+(\S+)|firewall-cmd\s+.*--add-port=(\S+)|New-NetFirewallRule\b.*-LocalPort\s+(\S+)|iptables\s+.*--dport\s+(\d+))`)
-	localCompose    = regexp.MustCompile(`\bdocker[ -]compose\s+(?:-f\s+(\S+)\s+)?up\b`)
-	localRun        = regexp.MustCompile(`\bdocker\s+run\b(.*)`)
-	localCron       = regexp.MustCompile(`(?i)\bcrontab\b|\bschtasks\s+/create\b|\bRegister-ScheduledTask\b`)
-	localChmod      = regexp.MustCompile(`\bchmod\s+(?:-R\s+)?(777|666|a\+w|o\+w)\s+(\S+)`)
-	localWriteSys   = regexp.MustCompile(`(?:>>?|\btee\s+(?:-a\s+)?)\s*(/etc/\S+|/usr/\S+|/var/\S+|~/\.\S+)`)
-	localRemove     = regexp.MustCompile(`^\s*(?:sudo\s+)?(?:rm\s+(-\S+\s+)*(\S+)|Remove-Item\s+(?:-\S+\s+)*["']?([^\s"']+))`)
-	localPolicy     = regexp.MustCompile(`(?i)\bSet-ExecutionPolicy\s+(\S+)`)
-	localPM2        = regexp.MustCompile(`\bpm2\s+start\s+(\S+)`)
-	localRunFile    = regexp.MustCompile(`^\s*(?:sudo\s+(?:-\S+\s+)*)?(?:sh|bash)\s+(\S+\.sh)\b`)
+	localPipe       = regexp.MustCompile(`(?i)\b(curl|wget|Invoke-WebRequest|iwr|irm|Invoke-RestMethod)\b[^|]*?(https?://[^\s"'()<>|]+)[^|]*\|\s*(?:sudo\s+(?:-\S+\s+)*)?(bash|sh|zsh|python3?|iex|Invoke-Expression)`)
+	// The address ends at a quote, a space or a bracket: $(curl … http://x/y) is the address http://x/y.
+	localDownload = regexp.MustCompile(`(?i)\b(curl|wget|Invoke-WebRequest|iwr|irm|Invoke-RestMethod)\b.*?(https?://[^\s"'()<>|]+)`)
+	localOutFile  = regexp.MustCompile(`(?i)(?:-o|-O|--output|-OutFile)\s+["']?([^\s"']+)`)
+	localGitClone = regexp.MustCompile(`\bgit\s+clone\s+(?:-\S+\s+)*(\S+)`)
+	localService  = regexp.MustCompile(`(?i)\bsystemctl\s+(enable\s+--now|enable|start|restart)\s+(\S+)`)
+	localUser     = regexp.MustCompile(`(?i)\b(useradd|adduser|New-LocalUser)\s+(?:-\S+\s+\S+\s+)*["']?([\w.-]+)`)
+	localUsermod  = regexp.MustCompile(`(?i)\busermod\s+.*-aG\s+(\S+)\s+(\S+)`)
+	localFirewall = regexp.MustCompile(`(?i)\b(?:ufw\s+allow\s+(\S+)|firewall-cmd\s+.*--add-port=(\S+)|New-NetFirewallRule\b.*-LocalPort\s+(\S+)|iptables\s+.*--dport\s+(\d+))`)
+	localCompose  = regexp.MustCompile(`\bdocker[ -]compose\s+(?:-f\s+(\S+)\s+)?up\b`)
+	localRun      = regexp.MustCompile(`\bdocker\s+run\b(.*)`)
+	localCron     = regexp.MustCompile(`(?i)\bcrontab\b|\bschtasks\s+/create\b|\bRegister-ScheduledTask\b`)
+	localChmod    = regexp.MustCompile(`\bchmod\s+(?:-R\s+)?(777|666|a\+w|o\+w)\s+(\S+)`)
+	localWriteSys = regexp.MustCompile(`(?:>>?|\btee\s+(?:-a\s+)?)\s*(/etc/\S+|/usr/\S+|/var/\S+|~/\.\S+)`)
+	localRemove   = regexp.MustCompile(`^\s*(?:sudo\s+)?(?:rm\s+(-\S+\s+)*(\S+)|Remove-Item\s+(?:-\S+\s+)*["']?([^\s"']+))`)
+	localPolicy   = regexp.MustCompile(`(?i)\bSet-ExecutionPolicy\s+(\S+)`)
+	localPM2      = regexp.MustCompile(`\bpm2\s+start\s+(\S+)`)
+	localRunFile  = regexp.MustCompile(`^\s*(?:sudo\s+(?:-\S+\s+)*)?(?:sh|bash)\s+(\S+\.sh)\b`)
 )
+
+// metadataURL is an address on the cloud server's own metadata service.
+func metadataURL(u string) bool {
+	rest := strings.TrimPrefix(strings.TrimPrefix(u, "http://"), "https://")
+	host, _, _ := strings.Cut(rest, "/")
+	host, _, _ = strings.Cut(host, ":")
+	return metadataHost(host)
+}
 
 // localStep says what one line does on the machine, or returns false when
 // it does nothing worth a step.
@@ -78,6 +87,11 @@ func localStep(code, here string, resolve func(string) string) (model.Step, bool
 		st.Says = "Installs the Python packages " + words(localPip.FindStringSubmatch(code)[1])
 	case localGitClone.MatchString(code):
 		st.Says = "Downloads the code in " + clean(localGitClone.FindStringSubmatch(code)[1])
+	case localDownload.MatchString(code) && metadataURL(localDownload.FindStringSubmatch(code)[2]):
+		// http://169.254.169.254/latest/meta-data/public-ipv4: the server asks about itself.
+		u := localDownload.FindStringSubmatch(code)[2]
+		what := u[strings.Index(u[len("http://"):], "/")+len("http://"):]
+		st.Says = "Asks the cloud server's own metadata service for " + strings.TrimPrefix(what, "/")
 	case localDownload.MatchString(code):
 		m := localDownload.FindStringSubmatch(code)
 		st.Says = "Downloads " + clean(m[2])
@@ -107,9 +121,25 @@ func localStep(code, here string, resolve func(string) string) (model.Step, bool
 		}
 	case localService.MatchString(code):
 		m := localService.FindStringSubmatch(code)
-		st.Says = "Starts the service " + clean(m[2])
+		// systemctl enable --now php-fpm httpd starts both.
+		var names []string
+		for _, w := range strings.Fields(code[strings.Index(code, m[0])+len(m[0])-len(m[2]):]) {
+			if strings.HasPrefix(w, "-") || strings.ContainsAny(w, "&|;>") {
+				break
+			}
+			names = append(names, clean(w))
+		}
+		if len(names) == 1 {
+			st.Says = "Starts the service " + names[0]
+		} else {
+			st.Says = "Starts the services " + strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+		}
 		if strings.Contains(m[1], "enable") {
-			st.Says += " and makes it start every time the machine starts"
+			if len(names) == 1 {
+				st.Says += " and makes it start every time the machine starts"
+			} else {
+				st.Says += " and makes them start every time the machine starts"
+			}
 		}
 	case localUser.MatchString(code):
 		i := localUser.FindStringIndex(code)

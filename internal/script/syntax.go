@@ -30,7 +30,7 @@ func syntax(g *model.Graph, f source.File) {
 			return
 		}
 		cmd = exec.CommandContext(ctx, py, "-I", "-c",
-			"import ast,sys\ntry:\n ast.parse(open(sys.argv[1],'rb').read(),sys.argv[1])\nexcept SyntaxError as e:\n print('LINE',e.lineno,e.msg)",
+			"import ast,sys\ntry:\n ast.parse(sys.stdin.buffer.read(),sys.argv[1])\nexcept SyntaxError as e:\n print('LINE',e.lineno,e.msg)",
 			f.Path)
 	case source.JavaScript:
 		ext := strings.ToLower(filepath.Ext(f.Path))
@@ -38,7 +38,8 @@ func syntax(g *model.Graph, f source.File) {
 			return // TypeScript and JSX need a compiler, not just node
 		}
 		node := firstFound("node")
-		if node == "" {
+		// node can only check a file on disk, so only when that file is exactly what was read.
+		if disk, err := os.ReadFile(f.Path); node == "" || err != nil || !bytes.Equal(disk, f.Data) {
 			return
 		}
 		cmd = exec.CommandContext(ctx, node, "--check", f.Path)
@@ -47,20 +48,23 @@ func syntax(g *model.Graph, f source.File) {
 		if bash == "" {
 			return
 		}
-		cmd = exec.CommandContext(ctx, bash, "-n", f.Path)
+		cmd = exec.CommandContext(ctx, bash, "-n") // the script comes in on stdin
 	case source.PowerShell:
 		pwsh := firstFound("pwsh", "powershell")
 		if pwsh == "" {
 			return
 		}
-		// The path goes in through the environment, never into the command text.
+		// The code comes in on stdin, never into the command text.
 		cmd = exec.CommandContext(ctx, pwsh, "-NoProfile", "-NonInteractive", "-Command",
-			`$e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($env:LOOKFIRST_FILE,[ref]$null,[ref]$e); foreach($x in $e){ 'LINE {0} {1}' -f $x.Extent.StartLineNumber, $x.Message }`)
-		cmd.Env = append(os.Environ(), "LOOKFIRST_FILE="+f.Path)
+			// The bytes are read as UTF-8, whatever the console's code page: å, ä and ö must not turn into quote marks.
+			`$m=New-Object IO.MemoryStream; [Console]::OpenStandardInput().CopyTo($m); $t=[Text.Encoding]::UTF8.GetString($m.ToArray()).TrimStart([char]0xFEFF); `+
+				`$e=$null; [void][System.Management.Automation.Language.Parser]::ParseInput($t,[ref]$null,[ref]$e); foreach($x in $e){ 'LINE {0} {1}' -f $x.Extent.StartLineNumber, $x.Message }`)
 	default:
 		return
 	}
 
+	// What was read, not the file on disk: an editor's unsaved text, pasted code or a script written into a template.
+	cmd.Stdin = bytes.NewReader(f.Data)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err := cmd.Run()
