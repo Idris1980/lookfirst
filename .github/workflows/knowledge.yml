@@ -1,8 +1,8 @@
 # Keeps what LookFirst knows about Azure and AWS current: every Monday it
 # takes the newest lists of resource types from Microsoft's template
 # schemas and Amazon's CloudFormation resource specification, runs the
-# tests against them, and opens a pull request when anything changed. A
-# person merges it; nothing is released by this workflow.
+# tests against them, and when anything changed it opens a pull request
+# and merges it. Nothing is released by this workflow.
 
 name: Refresh Azure and AWS knowledge
 
