@@ -85,3 +85,17 @@ jobs:
           Every file is signed. Check one with: gh attestation verify lookfirst-win32-x64-$v.vsix --repo Idris1980/lookfirst"
           gh release create "$TAG" --verify-tag --title "LookFirst $TAG" --notes "$notes" \
             vscode/bin/lookfirst-* vscode/bin/SHA256SUMS.txt vscode/*.vsix lookfirst.spdx.json
+
+      # The same signed packages, one per platform, to the Visual Studio
+      # Marketplace. Skipped until the repository has the VSCE_PAT secret
+      # (a token from Azure DevOps with Marketplace: Manage).
+      - name: Publish to the Visual Studio Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        working-directory: vscode
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "No VSCE_PAT secret: not published to the Marketplace."
+            exit 0
+          fi
+          npx --yes @vscode/vsce@3.6.0 publish --packagePath *.vsix
