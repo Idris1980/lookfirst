@@ -14,12 +14,39 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Publishes a release's signed packages to the Marketplace again, for a
+  # platform the Marketplace did not keep:
+  #   gh workflow run release.yml -f tag=v0.22.1
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release to publish again, such as v0.22.1"
+        required: true
 
 permissions:
   contents: read
 
 jobs:
+  republish:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # read the release
+      id-token: write # sign in to the Marketplace
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Take the signed packages from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.vsix"
+      - name: Publish the platforms the Marketplace does not have yet
+        run: npx --yes @vscode/vsce@4.1.1 publish --oidc --skip-duplicate --packagePath *.vsix
+
   release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write     # create the release
@@ -94,4 +121,4 @@ jobs:
       # Trusted Publishing policy for Idris1980/lookfirst and release.yml.
       - name: Publish to the Visual Studio Marketplace
         working-directory: vscode
-        run: npx --yes @vscode/vsce@4.1.1 publish --oidc --packagePath *.vsix
+        run: npx --yes @vscode/vsce@4.1.1 publish --oidc --skip-duplicate --packagePath *.vsix
