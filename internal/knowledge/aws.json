@@ -377,6 +377,7 @@
     "AWS::CloudWatch::AccessProfile": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudwatch-accessprofile.html",
     "AWS::CloudWatch::Alarm": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudwatch-alarm.html",
     "AWS::CloudWatch::AlarmMuteRule": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudwatch-alarmmuterule.html",
+    "AWS::CloudWatch::Alert": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudwatch-alert.html",
     "AWS::CloudWatch::AnomalyDetector": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudwatch-anomalydetector.html",
     "AWS::CloudWatch::CompositeAlarm": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudwatch-compositealarm.html",
     "AWS::CloudWatch::Dashboard": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-cloudwatch-dashboard.html",
@@ -1180,6 +1181,7 @@
     "AWS::KinesisAnalyticsV2::ApplicationCloudWatchLoggingOption": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-kinesisanalyticsv2-applicationcloudwatchloggingoption.html",
     "AWS::KinesisAnalyticsV2::ApplicationOutput": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-kinesisanalyticsv2-applicationoutput.html",
     "AWS::KinesisAnalyticsV2::ApplicationReferenceDataSource": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-kinesisanalyticsv2-applicationreferencedatasource.html",
+    "AWS::KinesisAnalyticsV2::Snapshot": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-kinesisanalyticsv2-snapshot.html",
     "AWS::KinesisFirehose::DeliveryStream": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-kinesisfirehose-deliverystream.html",
     "AWS::KinesisVideo::SignalingChannel": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-kinesisvideo-signalingchannel.html",
     "AWS::KinesisVideo::Stream": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-kinesisvideo-stream.html",
@@ -1797,6 +1799,7 @@
     "AWS::SSM::Association": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ssm-association.html",
     "AWS::SSM::AutomationExecution": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ssm-automationexecution.html",
     "AWS::SSM::CloudConnector": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ssm-cloudconnector.html",
+    "AWS::SSM::DefaultHostManagementConfiguration": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ssm-defaulthostmanagementconfiguration.html",
     "AWS::SSM::Document": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ssm-document.html",
     "AWS::SSM::MaintenanceWindow": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ssm-maintenancewindow.html",
     "AWS::SSM::MaintenanceWindowTarget": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ssm-maintenancewindowtarget.html",
@@ -2059,7 +2062,9 @@
     "AWS::WAFv2::WebACLAssociation": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wafv2-webaclassociation.html",
     "AWS::WellArchitected::AgentContext": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wellarchitected-agentcontext.html",
     "AWS::WellArchitected::AgentGoal": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wellarchitected-agentgoal.html",
+    "AWS::WellArchitected::AgentOrganizationalProfile": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wellarchitected-agentorganizationalprofile.html",
     "AWS::WellArchitected::AgentProfile": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wellarchitected-agentprofile.html",
+    "AWS::WellArchitected::AgentProfilePolicy": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wellarchitected-agentprofilepolicy.html",
     "AWS::WellArchitected::Lens": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wellarchitected-lens.html",
     "AWS::WellArchitected::Profile": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wellarchitected-profile.html",
     "AWS::WellArchitected::ReviewTemplate": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-wellarchitected-reviewtemplate.html",
@@ -2108,6 +2113,6 @@
     "AWS::XRay::TransactionSearchConfig": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-xray-transactionsearchconfig.html",
     "Alexa::ASK::Skill": "http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-ask-skill.html"
   },
-  "updated": "2026-11-06",
-  "version": "271.0.0"
+  "updated": "2026-11-16",
+  "version": "272.0.0"
 }
