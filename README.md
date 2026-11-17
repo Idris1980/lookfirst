@@ -4,6 +4,8 @@
 
 Code from an AI assistant, a forum or a tutorial often works, and often does more than you think: it opens your server to the whole internet, writes passwords into files, downloads and runs other scripts, or makes itself start every time you log in. LookFirst reads the code, without running it, and shows you what it would build and how it fits together, what happens step by step, and what could go wrong, before it is too late to undo.
 
+![What a CloudFormation template would build: a VPC with a public subnet and a web server open to the internet on ports 80 and 22, and the resources outside the network marked with their risks](docs/images/picture.png)
+
 ## Try it now, nothing to install
 
 Open **[idris1980.github.io/lookfirst](https://idris1980.github.io/lookfirst/)**, paste some code or choose a file, and you get the review. Everything happens inside your browser: your code is not sent anywhere.
@@ -54,7 +56,7 @@ Next to each problem in the report, and in the light bulb on each squiggle, ther
 4. The answer explains the problem in plain language and suggests a fix, shown next to your code so you can compare.
 5. Your file is changed only if you choose **Apply**. The real passwords are put back in at that moment, on your computer.
 
-It uses the AI you already have in VS Code, such as GitHub Copilot; **Copilot Free** is enough and costs nothing. If you have a Claude plan and Claude Code, LookFirst can ask Claude through it instead, covered by your plan. Or use your own Anthropic API key (billed by Anthropic). The details are in the [extension's guide](vscode/README.md).
+It uses the AI you already have in VS Code, such as GitHub Copilot; **Copilot Free** is enough and costs nothing. Or use Claude with your own Anthropic API key (billed by Anthropic). The details are in the [extension's guide](vscode/README.md).
 
 ## What it looks for
 

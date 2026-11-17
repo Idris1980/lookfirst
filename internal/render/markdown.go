@@ -148,7 +148,7 @@ func chainMarkdown(w io.Writer, g *model.Graph) {
 			if it.Skipped {
 				num = "–"
 			}
-			line := md(it.Says)
+			line := md(masked(it.Says))
 			if it.Deletes {
 				line = "**" + line + "**"
 			}

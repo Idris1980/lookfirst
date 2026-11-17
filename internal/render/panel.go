@@ -58,11 +58,11 @@ func reviewCards(g *model.Graph, chains []chain.Chain, opt Options) []reviewCard
 	walk = func(title string, items []chain.Item) {
 		for _, it := range items {
 			for _, id := range it.Creates {
-				steps[id] = append(steps[id], fmt.Sprintf("%s, step %s: %s", title, it.Num, it.Says))
+				steps[id] = append(steps[id], fmt.Sprintf("%s, step %s: %s", title, it.Num, masked(it.Says)))
 				needs[id] = append(needs[id], it.Needs...)
 			}
 			for _, id := range it.Changes {
-				steps[id] = append(steps[id], fmt.Sprintf("%s, step %s: %s", title, it.Num, it.Says))
+				steps[id] = append(steps[id], fmt.Sprintf("%s, step %s: %s", title, it.Num, masked(it.Says)))
 			}
 			walk(title, it.Sub)
 		}

@@ -6,15 +6,14 @@
 // it, after seeing the change.
 //
 // The model is the one in VS Code (the default) or, for those who choose it
-// with lookFirst.ai.provider, Claude: through the Claude Code program they
-// are signed in to (their Claude plan), or through the Anthropic API with
-// their own key, kept in VS Code's secret storage.
+// with lookFirst.ai.provider, Claude through the Anthropic API with their
+// own key, kept in VS Code's secret storage. A Claude Pro or Max plan is
+// not used: Anthropic does not allow other programs to route requests
+// through a consumer subscription.
 const vscode = require('vscode');
-const os = require('os');
 const path = require('path');
 const ai = require('./ai');
 const anthropic = require('./anthropic');
-const claudeCode = require('./claudecode');
 
 const SCHEME = 'lookfirst-ai';
 const KEY_STORAGE_ID = 'lookFirst.anthropicApiKey';
@@ -156,26 +155,6 @@ async function explain(h, target, line, title, detail) {
 async function chooseModel() {
   const config = vscode.workspace.getConfiguration('lookFirst');
   const wanted = config.get('ai.model');
-
-  if (config.get('ai.provider') === 'claude-code') {
-    const ext = vscode.extensions.getExtension('anthropic.claude-code');
-    const extensionsDir = ext ? path.dirname(ext.extensionPath) : path.join(os.homedir(), '.vscode', 'extensions');
-    const bin = claudeCode.find(config.get('ai.claudePath'), extensionsDir);
-    if (!bin) {
-      vscode.window.showWarningMessage('LookFirst: the Claude Code program was not found. Install Claude Code and sign in with your Claude account, or set its full path in the setting lookFirst.ai.claudePath.');
-      return undefined;
-    }
-    const modelName = claudeCode.model(wanted);
-    const model = {
-      name: `Claude${modelName ? ' ' + ai.modelLabel(modelName).replace(/^Claude /, '') : ''} through Claude Code (your Claude plan)`,
-      ask: async (prompt, token) => {
-        const reply = await claudeCode.ask({ bin, modelName, prompt, onCancel: (stop) => token.onCancellationRequested(stop) });
-        model.used = claudeCode.tokens(reply.usage);
-        return reply.text;
-      },
-    };
-    return model;
-  }
 
   if (config.get('ai.provider') === 'anthropic') {
     let apiKey = await secrets.get(KEY_STORAGE_ID);

@@ -7,6 +7,14 @@ Copied some code from an AI assistant or a forum and not sure what it does? Look
 - **The risks in plain English**: ports open to the whole internet, passwords written in the code, scripts that download and run more code, files that start automatically, and more.
 - **Where in the code** each risk is, as squiggles and in the Problems panel.
 
+![What a CloudFormation template would build: a VPC with a public subnet and a web server open to the internet on ports 80 and 22, and the resources outside the network marked with their risks](https://raw.githubusercontent.com/Idris1980/lookfirst/main/docs/images/picture.png)
+
+![What a setup script would do, step by step: it downloads a script and runs it at once, installs nginx and makes a folder writable for everyone, each step with its risks](https://raw.githubusercontent.com/Idris1980/lookfirst/main/docs/images/chain.png)
+
+![The review card of a database: the line of code it comes from, its step in the chain, its risks with the first thing to do, and what can reach it](https://raw.githubusercontent.com/Idris1980/lookfirst/main/docs/images/card.png)
+
+LookFirst is in preview: it is used and tested every day, and it still changes. It reads code as text and can miss things or warn about something harmless, so read what it says before you trust it.
+
 ## How to use it
 
 - Right-click a file or folder and choose **Show in LookFirst**.
@@ -36,8 +44,6 @@ AI answers can be wrong. Read the change before you apply it.
 
 By default LookFirst uses the AI model you already have in VS Code, such as GitHub Copilot (Copilot Free works), and picks the largest one available. Choose another with `lookFirst.ai.model`.
 
-If you have a Claude plan (Pro or Max) and the Claude Code program, set `lookFirst.ai.provider` to `claude-code`. LookFirst then asks Claude through Claude Code, which you are already signed in to, so it is covered by your plan and needs no API key. Claude Code can read files and run commands, so LookFirst starts it without any tools or customizations, in an empty folder of its own: it can only answer the question. The answer shows how many tokens it used.
-
 If you would rather use Claude directly, set `lookFirst.ai.provider` to `anthropic`. The first time, LookFirst asks for an API key from [console.anthropic.com](https://console.anthropic.com/). The key is stored encrypted in VS Code's secret storage, never in settings or files, and is only sent to Anthropic; remove it any time with **LookFirst: Remove Anthropic API Key**. It uses Claude Opus 5.5 unless you set `lookFirst.ai.model` to `sonnet`, `haiku`, `fable` or an exact model id. Use is billed to your Anthropic account, separately from a Claude Pro or Max subscription, which other programs cannot use. Everything else is the same: the masking, the preview before each request, and Apply.
 
 ## What it reads
@@ -64,5 +70,4 @@ LookFirst tells you what it found. It cannot promise that code is safe: code tha
 | `lookFirst.ai.enabled` | `false` | Allow asking the AI model in VS Code. User settings only. |
 | `lookFirst.ai.showBeforeSending` | `true` | Show what will be sent, and ask, every time. User settings only. |
 | `lookFirst.ai.model` | (largest) | Which AI model to ask, by part of its name, such as `gpt-4.1` or `claude`; with Anthropic, `opus` (default), `sonnet`, `haiku`, `fable` or an exact id. User settings only. |
-| `lookFirst.ai.provider` | `vscode` | `vscode` (Copilot or another model in VS Code), `claude-code` (Claude through Claude Code and your Claude plan) or `anthropic` (Claude with your own API key). User settings only. |
-| `lookFirst.ai.claudePath` | (found) | The Claude Code program for `claude-code`. User settings only. |
+| `lookFirst.ai.provider` | `vscode` | `vscode` (Copilot or another model in VS Code) or `anthropic` (Claude with your own API key). User settings only. |

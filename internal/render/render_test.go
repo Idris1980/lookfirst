@@ -270,3 +270,25 @@ func TestNetworkPicture(t *testing.T) {
 		t.Error("the report should draw the VPC as a frame and light up on hover")
 	}
 }
+
+// A password written in a command is not shown in the chain: reports are
+// shared, and the secret must not travel with them.
+func TestChainMasksSecrets(t *testing.T) {
+	g := &model.Graph{Sources: []string{"setup.sh"}}
+	g.Steps = []model.Step{{File: "setup.sh", Line: 3, Says: "Creates the virtual machine vm-1",
+		Code: `az vm create -g rg -n vm-1 --admin-password "Sup3rS3cret!2026"`}}
+	var html, text, md bytes.Buffer
+	if err := HTML(&html, []Section{{Name: "x", Graph: g}}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	Text(&text, []Section{{Name: "x", Graph: g}})
+	Markdown(&md, []Section{{Name: "x", Graph: g}}, nil)
+	for name, out := range map[string]string{"html": html.String(), "text": text.String(), "markdown": md.String()} {
+		if strings.Contains(out, "Sup3rS3cret") {
+			t.Errorf("%s shows the password", name)
+		}
+	}
+	if !strings.Contains(html.String(), "SECRET_1") {
+		t.Error("the masked command should still be shown")
+	}
+}

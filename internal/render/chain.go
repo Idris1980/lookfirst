@@ -10,6 +10,7 @@ import (
 
 	"github.com/Idris1980/lookfirst/internal/chain"
 	"github.com/Idris1980/lookfirst/internal/model"
+	"github.com/Idris1980/lookfirst/internal/risk"
 )
 
 // The chain is shown first in the report: what happens, in order, when
@@ -54,7 +55,7 @@ type boxLink struct{ Name, Card string }
 func stepViews(g *model.Graph, items []chain.Item, root string, opt Options) []stepView {
 	var out []stepView
 	for _, it := range items {
-		v := stepView{Num: it.Num, Says: it.Says, Note: it.Note, Code: it.Code, From: it.From,
+		v := stepView{Num: it.Num, Says: masked(it.Says), Note: it.Note, Code: masked(it.Code), From: it.From,
 			Deletes: it.Deletes, Skipped: it.Skipped, Href: reveal(opt, it.File, it.Line),
 			Needs: it.Needs, Uses: it.Uses, Existing: it.Existing}
 		if it.File != "" {
@@ -90,6 +91,14 @@ func stepViews(g *model.Graph, items []chain.Item, root string, opt Options) []s
 		}
 		out = append(out, v)
 	}
+	return out
+}
+
+// masked is a line of code, or what a step says about it, with passwords,
+// keys and tokens replaced by «SECRET_1» and so on: a report is often
+// shared, and a secret written in the code must not travel with it.
+func masked(text string) string {
+	out, _ := risk.Mask(text)
 	return out
 }
 
@@ -144,7 +153,7 @@ func Chain(w io.Writer, g *model.Graph) {
 				if it.Skipped || it.Existing {
 					num = "-"
 				}
-				fmt.Fprintf(w, "%s  %-5s %s", pad, num, it.Says)
+				fmt.Fprintf(w, "%s  %-5s %s", pad, num, masked(it.Says))
 				if it.Note != "" {
 					fmt.Fprintf(w, " (%s)", it.Note)
 				}
