@@ -87,15 +87,11 @@ jobs:
             vscode/bin/lookfirst-* vscode/bin/SHA256SUMS.txt vscode/*.vsix lookfirst.spdx.json
 
       # The same signed packages, one per platform, to the Visual Studio
-      # Marketplace. Skipped until the repository has the VSCE_PAT secret
-      # (a token from Azure DevOps with Marketplace: Manage).
+      # Marketplace, with Trusted Publishing: GitHub proves to the
+      # Marketplace that this workflow in this repository is asking (the
+      # id-token permission above), and gets a credential that lasts 15
+      # minutes. No token is stored anywhere. The publisher idris1980 has a
+      # Trusted Publishing policy for Idris1980/lookfirst and release.yml.
       - name: Publish to the Visual Studio Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
         working-directory: vscode
-        run: |
-          if [ -z "$VSCE_PAT" ]; then
-            echo "No VSCE_PAT secret: not published to the Marketplace."
-            exit 0
-          fi
-          npx --yes @vscode/vsce@3.6.0 publish --packagePath *.vsix
+        run: npx --yes @vscode/vsce@4.1.1 publish --oidc --packagePath *.vsix
