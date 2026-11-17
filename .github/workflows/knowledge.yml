@@ -48,3 +48,4 @@ jobs:
           gh pr create --title "Nya listor över Azure- och AWS-typer" \
             --body "Hämtade från Microsofts mallscheman och Amazons CloudFormation-specifikation. Testerna gick igenom med de nya listorna." \
             --base main --head "$branch"
+          gh pr merge "$branch" --squash --delete-branch
