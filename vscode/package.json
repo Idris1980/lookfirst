@@ -1,8 +1,8 @@
 {
   "name": "lookfirst",
   "displayName": "LookFirst: See What Code Does Before You Run It",
-  "description": "Shows what code would build or do before you run it: a picture of servers, ports, files and websites it touches, and the risks in plain English. Reads the code without running it. Nothing leaves your computer unless you ask the AI to explain a problem, and then you see exactly what is sent.",
-  "version": "0.22.1",
+  "description": "Security review of Azure, AWS and AI-written code before you run it. Reads Terraform, Bicep, ARM, CloudFormation, Azure CLI, AWS CLI, PowerShell, Bash, Docker and Kubernetes without running them, and shows what would be built, how it connects and the risks in plain English, such as open ports and keys in plain text. Nothing leaves your computer unless you ask the AI to explain a problem, and then you see exactly what is sent.",
+  "version": "0.22.2",
   "publisher": "idris1980",
   "license": "MIT",
   "preview": true,
@@ -20,16 +20,34 @@
   },
   "categories": [
     "Linters",
+    "Visualization",
     "Other"
   ],
   "keywords": [
     "security",
+    "azure",
+    "aws",
     "terraform",
+    "bicep",
+    "arm template",
+    "cloudformation",
+    "infrastructure as code",
+    "iac",
+    "devops",
+    "cloud security",
+    "code review",
+    "security scanner",
+    "misconfiguration",
+    "secrets",
+    "azure cli",
+    "aws cli",
+    "powershell",
+    "bash",
     "docker",
     "kubernetes",
     "ai code",
-    "secrets",
-    "bicep"
+    "copilot",
+    "architecture diagram"
   ],
   "main": "./extension.js",
   "activationEvents": [
