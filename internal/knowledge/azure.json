@@ -2474,5 +2474,5 @@
     "microsoft.aadiam/privateLinkForAzureAd": "2020-03-01-preview",
     "microsoft.aadiam/privateLinkForAzureAd/privateEndpointConnections": "2020-03-01"
   },
-  "updated": "2026-11-16"
+  "updated": "2026-11-23"
 }
